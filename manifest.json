@@ -9,8 +9,8 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%2318181b'/%3E%3Cpath d='M160 120h120l92 92v180H160z' fill='none' stroke='%232563eb' stroke-width='32' stroke-linejoin='round'/%3E%3Cpath d='M280 120v92h92' fill='none' stroke='%232563eb' stroke-width='32' stroke-linejoin='round'/%3E%3Ctext x='256' y='360' font-family='sans-serif' font-weight='bold' font-size='96' fill='%23ffffff' text-anchor='middle'%3EPDF%3C/text%3E%3C/svg%3E",
-      "sizes": "512x512",
+      "src": "./favicon.svg",
+      "sizes": "32x32 48x48 72x72 96x96 128x128 256x256 512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }

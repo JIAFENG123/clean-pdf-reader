@@ -1,8 +1,9 @@
 // Clean Web PDF Reader Service Worker
-const CACHE_NAME = 'clean-pdf-reader-v1';
+const CACHE_NAME = 'clean-pdf-reader-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
+  './favicon.svg',
   './css/style.css',
   './js/app.js',
   './lib/pdf.min.js',
