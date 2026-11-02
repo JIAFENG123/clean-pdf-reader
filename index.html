@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="studio">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#18181b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Clean PDF Reader - 极简专注阅读器</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="stylesheet" href="./css/style.css">
+  <script src="./lib/pdf.min.js"></script>
+</head>
+<body>
+  <div id="app" class="app-container">
+    
+    <!-- Docked Clean Header Toolbar -->
+    <header id="toolbar" class="app-header">
+      
+      <!-- Left: Sidebar toggle & Document title -->
+      <div class="header-left">
+        <button id="btnToggleSidebar" class="btn-icon" data-tooltip="侧边栏 [" data-tooltip-pos="right">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="doc-title-badge" id="docTitleBadge" title="当前文档">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span id="docTitle">Sample Document.pdf</span>
+        </div>
+      </div>
+
+      <!-- Center: Navigation, Pages & Zoom -->
+      <div class="header-center">
+        <!-- Page Jump Control -->
+        <div class="page-control-group">
+          <button id="prevPageBtn" class="btn-icon" data-tooltip="上一页 K" style="width:26px;height:24px;">
+            <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <input id="pageInput" class="page-input" type="number" min="1" value="1">
+          <span id="pageCount" class="page-total">/ 1</span>
+          <button id="nextPageBtn" class="btn-icon" data-tooltip="下一页 J" style="width:26px;height:24px;">
+            <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <!-- Zoom Controls -->
+        <div class="zoom-group">
+          <button id="zoomOutBtn" class="btn-icon" data-tooltip="缩小 -" style="width:26px;height:24px;">
+            <svg viewBox="0 0 24 24"><path d="M5 12h14" stroke-linecap="round"/></svg>
+          </button>
+          <span id="zoomLabel" class="zoom-label" data-tooltip="重置 100% (0)">100%</span>
+          <button id="zoomInBtn" class="btn-icon" data-tooltip="放大 +" style="width:26px;height:24px;">
+            <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5v14" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+
+        <button id="fitWidthBtn" class="btn-icon" data-tooltip="适应宽度 W">
+          <svg viewBox="0 0 24 24"><path d="M4 12h16M7 9l-3 3 3 3M17 9l3 3-3 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="fitPageBtn" class="btn-icon" data-tooltip="适应整页 P">
+          <svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6M9 13h6" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <!-- Right: View Layout & Tools -->
+      <div class="header-right">
+        <button id="viewModeBtn" class="btn-icon" data-tooltip="视图模式" data-tooltip-pos="left">
+          <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="7" rx="1"/><rect x="4" y="14" width="16" height="7" rx="1"/></svg>
+        </button>
+        <button id="rotateBtn" class="btn-icon" data-tooltip="旋转 90° R" data-tooltip-pos="left">
+          <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.8 1.04 6.43 2.71L21 8M21 3v5h-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="searchBtn" class="btn-icon" data-tooltip="全文搜索 Ctrl+F" data-tooltip-pos="left">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35" stroke-linecap="round"/></svg>
+        </button>
+        <button id="themeBtn" class="btn-icon" data-tooltip="护眼模式 D" data-tooltip-pos="left">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke-linecap="round"/></svg>
+        </button>
+        <button id="fullscreenBtn" class="btn-icon" data-tooltip="全屏禅模式 F" data-tooltip-pos="left">
+          <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+
+        <div class="toolbar-divider"></div>
+
+        <label for="fileInput" class="btn-text" data-tooltip="打开本地 PDF" data-tooltip-pos="left">
+          <svg viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8l-6-6H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2zM14 2v6h6M12 18v-6M9 15l3-3 3 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>打开文件</span>
+        </label>
+        <input id="fileInput" type="file" accept="application/pdf" style="display: none;">
+      </div>
+    </header>
+
+    <!-- Floating Search Modal -->
+    <div id="searchModal" class="search-modal">
+      <svg width="15" height="15" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" style="color:var(--text-muted);"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="searchInput" class="search-input" type="text" placeholder="搜索文档内容..." autocomplete="off">
+      <span id="searchCount" class="search-counter">0 / 0</span>
+      <button id="searchPrevBtn" class="btn-icon" style="width:24px;height:24px;" title="上一个匹配项">
+        <svg viewBox="0 0 24 24" style="width:14px;height:14px;"><path d="m18 15-6-6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="searchNextBtn" class="btn-icon" style="width:24px;height:24px;" title="下一个匹配项">
+        <svg viewBox="0 0 24 24" style="width:14px;height:14px;"><path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="searchCloseBtn" class="btn-icon" style="width:24px;height:24px;" title="关闭 (Esc)">
+        <svg viewBox="0 0 24 24" style="width:14px;height:14px;"><path d="M18 6 6 18M6 6l12 12" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="main-view">
+      
+      <!-- Collapsible Sidebar -->
+      <aside id="sidebar" class="sidebar collapsed">
+        <div class="sidebar-header">
+          <div class="sidebar-tabs">
+            <button id="tabThumbnails" class="tab-btn active">缩略图</button>
+            <button id="tabOutline" class="tab-btn">目录大纲</button>
+            <button id="tabNotes" class="tab-btn">读书笔记 <span id="notesBadge" class="tab-badge">0</span></button>
+          </div>
+        </div>
+        <div class="sidebar-content">
+          <div id="thumbnailsView"></div>
+          <div id="outlineView" style="display: none;"></div>
+          <div id="notesView" style="display: none;"></div>
+        </div>
+      </aside>
+
+      <!-- PDF Canvas Viewport -->
+      <main id="viewport" class="viewport">
+        <!-- Empty State Splash -->
+        <div id="emptyState" class="empty-state" style="display: none;">
+          <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="empty-title">极简阅读，静享专注</div>
+          <div class="empty-desc">拖拽任意 PDF 文件至此窗口即刻阅读，或直接体验内置示范文档。所有渲染均为本地纯客户端执行，绝无隐私泄露。</div>
+          <div class="empty-actions">
+            <button id="openSampleBtn" class="btn-primary">打开演示文档</button>
+            <label for="fileInput" class="btn-secondary" style="cursor: pointer; display: inline-flex; align-items: center;">选择本地文件</label>
+          </div>
+        </div>
+
+        <!-- Rendered Pages Container -->
+        <div id="pagesWrapper" class="pages-wrapper"></div>
+      </main>
+
+    </div>
+
+    <!-- Floating Text Selection Popover -->
+    <div id="selectionBar" class="selection-bar">
+      <div class="color-dot yellow" data-color="yellow" title="黄色高亮"></div>
+      <div class="color-dot green" data-color="green" title="绿色高亮"></div>
+      <div class="color-dot blue" data-color="blue" title="蓝色高亮"></div>
+      <div class="color-dot purple" data-color="purple" title="紫色高亮"></div>
+      <div class="toolbar-divider" style="height:14px;"></div>
+      <button id="btnSelectionNote" class="selection-action-btn">
+        <svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        <span>记笔记</span>
+      </button>
+      <button id="btnSelectionCopy" class="selection-action-btn">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <span>复制</span>
+      </button>
+    </div>
+
+    <!-- Note Creation Modal Backdrop -->
+    <div id="noteModalBackdrop" class="note-modal-backdrop">
+      <div class="note-modal">
+        <div class="note-modal-title">
+          <span>添加读书笔记</span>
+          <span id="noteModalPageBadge" class="note-badge">P. 1</span>
+        </div>
+        <div id="noteModalQuote" class="note-modal-quote"></div>
+        <textarea id="noteModalText" class="note-modal-textarea" placeholder="写下你的批注、思考或心得..."></textarea>
+        <div class="note-modal-actions">
+          <button id="btnCancelNote" class="btn-secondary">取消</button>
+          <button id="btnSaveNote" class="btn-primary">保存笔记</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Drag & Drop Visual Backdrop -->
+    <div id="dropOverlay" class="drop-overlay">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="drop-overlay-text">释放鼠标即可立即开启阅读</div>
+    </div>
+
+    <!-- Bottom status hint -->
+    <div class="bottom-status">
+      ESC 退出全屏 · [ 侧栏 · J/K 翻页 · Ctrl+F 搜索
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toastMsg" class="toast-msg">已复制到剪贴板</div>
+
+  </div>
+
+  <script src="./js/app.js"></script>
+</body>
+</html>
