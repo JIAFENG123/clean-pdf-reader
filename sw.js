@@ -1,14 +1,17 @@
-// Clean Web PDF Reader Service Worker
-const CACHE_NAME = 'clean-pdf-reader-v2';
+// Clean Web Reader (PDF & EPUB) Service Worker
+const CACHE_NAME = 'clean-reader-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './favicon.svg',
   './css/style.css',
   './js/app.js',
+  './lib/jszip.min.js',
+  './lib/epub.min.js',
   './lib/pdf.min.js',
   './lib/pdf.worker.min.js',
   './sample.pdf',
+  './sample.epub',
   './manifest.json'
 ];
 

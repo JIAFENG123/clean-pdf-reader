@@ -6,12 +6,14 @@
   <meta name="theme-color" content="#18181b">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Clean PDF Reader - 极简专注阅读器</title>
+  <title>Clean Reader - 极简专注阅读器 (PDF & EPUB)</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
   <link rel="alternate icon" href="./favicon.svg">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <link rel="manifest" href="./manifest.json">
   <link rel="stylesheet" href="./css/style.css">
+  <script src="./lib/jszip.min.js"></script>
+  <script src="./lib/epub.min.js"></script>
   <script src="./lib/pdf.min.js"></script>
 </head>
 <body>
@@ -86,11 +88,11 @@
 
         <div class="toolbar-divider"></div>
 
-        <label for="fileInput" class="btn-text" data-tooltip="打开本地 PDF" data-tooltip-pos="left">
+        <label for="fileInput" class="btn-text" data-tooltip="打开本地 PDF / EPUB" data-tooltip-pos="left">
           <svg viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8l-6-6H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2zM14 2v6h6M12 18v-6M9 15l3-3 3 3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span>打开文件</span>
         </label>
-        <input id="fileInput" type="file" accept="application/pdf" style="display: none;">
+        <input id="fileInput" type="file" accept=".pdf,application/pdf,.epub,application/epub+zip" style="display: none;">
       </div>
     </header>
 
@@ -135,15 +137,27 @@
         <div id="emptyState" class="empty-state" style="display: none;">
           <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <div class="empty-title">极简阅读，静享专注</div>
-          <div class="empty-desc">拖拽任意 PDF 文件至此窗口即刻阅读，或直接体验内置示范文档。所有渲染均为本地纯客户端执行，绝无隐私泄露。</div>
+          <div class="empty-desc">拖拽任意 PDF 或 EPUB 文件至此窗口即刻阅读，或直接体验内置示范文档。所有渲染均为本地纯客户端执行，绝无隐私泄露。</div>
           <div class="empty-actions">
-            <button id="openSampleBtn" class="btn-primary">打开演示文档</button>
+            <button id="openSampleBtn" class="btn-primary">打开 PDF 示例</button>
+            <button id="openSampleEpubBtn" class="btn-primary" style="background:#0d9488;">打开 EPUB 示例</button>
             <label for="fileInput" class="btn-secondary" style="cursor: pointer; display: inline-flex; align-items: center;">选择本地文件</label>
           </div>
         </div>
 
         <!-- Rendered Pages Container -->
         <div id="pagesWrapper" class="pages-wrapper"></div>
+
+        <!-- Rendered EPUB Container -->
+        <div id="epubWrapper" class="epub-wrapper" style="display: none;">
+          <div class="epub-stage">
+            <div id="epubViewerArea" class="epub-viewer-area"></div>
+            <div class="epub-footer">
+              <span id="epubFooterTitle">EPUB 电子书</span>
+              <span id="epubFooterProgress">0%</span>
+            </div>
+          </div>
+        </div>
       </main>
 
     </div>
