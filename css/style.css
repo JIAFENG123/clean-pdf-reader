@@ -1866,13 +1866,10 @@ html, body {
     height: 24px;
   }
 
-  .shelf-title {
-    font-size: 14px;
-  }
-
-  /* Hide long status text to keep header within screen */
+  /* Hide title & subtitle on mobile to keep header clean and prevent vertical wrapping */
+  .shelf-title,
   .shelf-subtitle {
-    display: none;
+    display: none !important;
   }
 
   .shelf-actions {

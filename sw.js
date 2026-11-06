@@ -1,13 +1,13 @@
 // Clean Web Reader (PDF & EPUB & Cloud Bookshelf) Service Worker
-const CACHE_NAME = 'clean-reader-v11';
+const CACHE_NAME = 'clean-reader-v12';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './favicon.svg?v=11',
-  './css/style.css?v=11',
-  './js/config.js?v=11',
-  './js/supabase-client.js?v=11',
-  './js/app.js?v=11',
+  './favicon.svg?v=12',
+  './css/style.css?v=12',
+  './js/config.js?v=12',
+  './js/supabase-client.js?v=12',
+  './js/app.js?v=12',
   './lib/supabase.min.js',
   './lib/jszip.min.js',
   './lib/epub.min.js',
