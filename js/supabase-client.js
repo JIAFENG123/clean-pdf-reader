@@ -5,10 +5,11 @@
   let client = null;
 
   function getClient() {
-    if (!client && window.supabase && window.CLOUD_CONFIG) {
+    const config = window.CLOUD_CONFIG || (typeof CLOUD_CONFIG !== 'undefined' ? CLOUD_CONFIG : null);
+    if (!client && window.supabase && config) {
       client = window.supabase.createClient(
-        window.CLOUD_CONFIG.SUPABASE_URL,
-        window.CLOUD_CONFIG.SUPABASE_KEY
+        config.SUPABASE_URL,
+        config.SUPABASE_KEY
       );
     }
     return client;
