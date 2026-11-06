@@ -1788,15 +1788,21 @@ function showToast(text, duration = 2200) {
   // ==========================================================================
   // Upgraded Bookshelf & Cloud Sync Logic
   // ==========================================================================
-  function showBookshelf() {
+  function showBookshelf(updateHash = true) {
     if (!DOM.bookshelfView) return;
     DOM.bookshelfView.classList.remove('hidden');
     refreshBookshelf();
+    if (updateHash && window.location.hash === '#reader') {
+      history.replaceState({ view: 'shelf' }, '', '#shelf');
+    }
   }
 
-  function hideBookshelf() {
+  function hideBookshelf(updateHash = true) {
     if (!DOM.bookshelfView) return;
     DOM.bookshelfView.classList.add('hidden');
+    if (updateHash && window.location.hash !== '#reader') {
+      history.pushState({ view: 'reader' }, '', '#reader');
+    }
   }
 
   // Classic Editorial Cloth Cover Palette (Penguin / Faber inspired)
@@ -1937,7 +1943,7 @@ function showToast(text, duration = 2200) {
         </div>
       `;
       const btn = document.getElementById('btnShelfOpenSample');
-      if (btn) btn.addEventListener('click', () => { hideBookshelf(); loadDocument('./sample.pdf', 'Sample Document.pdf'); });
+      if (btn) btn.addEventListener('click', () => { hideBookshelf(true); loadDocument('./sample.pdf', 'Sample Document.pdf'); });
       return;
     }
 
@@ -2136,9 +2142,29 @@ function showToast(text, duration = 2200) {
     if (DOM.btnBackToShelf) {
       DOM.btnBackToShelf.addEventListener('click', () => {
         syncReadingProgress(true);
-        showBookshelf();
+        if (window.location.hash === '#reader') {
+          history.back();
+        } else {
+          showBookshelf(true);
+        }
       });
     }
+
+    // Mobile / Browser Native Routing: Popstate listener
+    window.addEventListener('popstate', (e) => {
+      if (window.location.hash !== '#reader') {
+        // Returned to bookshelf from reader
+        if (DOM.bookshelfView && DOM.bookshelfView.classList.contains('hidden')) {
+          syncReadingProgress(true);
+          showBookshelf(false);
+        }
+      } else {
+        // Navigated forward to reader
+        if (state.currentBookId && DOM.bookshelfView && !DOM.bookshelfView.classList.contains('hidden')) {
+          hideBookshelf(false);
+        }
+      }
+    });
 
     // Flush progress on tab hide / browser unload
     window.addEventListener('visibilitychange', () => {
@@ -2464,7 +2490,7 @@ function showToast(text, duration = 2200) {
     applyTheme(state.theme);
     bindEvents();
     if (window.CloudService && window.CloudService.isConfigured()) {
-      showBookshelf();
+      if (!window.location.hash) { history.replaceState({ view: 'shelf' }, '', '#shelf'); } showBookshelf(false);
     } else {
       loadPDF('./sample.pdf', 'Sample Document.pdf');
     }

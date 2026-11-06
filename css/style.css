@@ -265,13 +265,15 @@ html, body {
 
 /* Page Navigation Group */
 .page-control-group {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   background: var(--bg-toolbar-hover);
   border-radius: var(--ui-radius-sm);
   padding: 2px 4px;
   gap: 2px;
   border: 1px solid var(--border-subtle);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .page-input {
@@ -307,6 +309,10 @@ html, body {
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   color: var(--text-secondary);
   padding: 0 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-block;
+  line-height: 1;
 }
 
 /* Zoom Controls Group */
@@ -1726,34 +1732,43 @@ html, body {
     gap: 4px;
   }
 
+  /* Hide title badge on mobile to free maximum space for page numbers */
   .doc-title-badge {
-    max-width: 100px;
-    font-size: 11px;
-    padding: 2px 6px;
-  }
-
-  .doc-title-badge svg {
-    display: none;
+    display: none !important;
   }
 
   .header-center {
+    flex: 1;
     max-width: none;
-    gap: 4px;
+    gap: 2px;
+    justify-content: center;
+    overflow: hidden;
   }
 
   .page-control-group {
-    gap: 2px;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 3px !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
   }
 
   .page-input {
-    width: 32px;
-    height: 24px;
-    font-size: 11px;
-    padding: 0 2px;
+    width: 28px !important;
+    height: 24px !important;
+    font-size: 11px !important;
+    padding: 0 1px !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
   }
 
   .page-total {
-    font-size: 11px;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+    display: inline-block !important;
+    flex-shrink: 0 !important;
+    line-height: 1 !important;
   }
 
   /* Hide Desktop Clutter on Mobile */
