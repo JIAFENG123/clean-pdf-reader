@@ -15,6 +15,9 @@
   <script src="./lib/jszip.min.js"></script>
   <script src="./lib/epub.min.js"></script>
   <script src="./lib/pdf.min.js"></script>
+  <script src="./lib/supabase.min.js"></script>
+  <script src="./js/config.js"></script>
+  <script src="./js/supabase-client.js"></script>
 </head>
 <body>
   <div id="app" class="app-container">
@@ -24,6 +27,9 @@
       
       <!-- Left: Sidebar toggle & Document title -->
       <div class="header-left">
+        <button id="btnBackToShelf" class="btn-icon" data-tooltip="返回书架" data-tooltip-pos="right" style="margin-right: 2px;">
+          <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <button id="btnToggleSidebar" class="btn-icon" data-tooltip="侧边栏 [" data-tooltip-pos="right">
           <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h7" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -204,6 +210,39 @@
     <!-- Bottom status hint -->
     <div class="bottom-status">
       ESC 退出全屏 · [ 侧栏 · J/K 翻页 · Ctrl+F 搜索
+    </div>
+
+    <!-- Bookshelf View (Overlay / First-Class Screen) -->
+    <div id="bookshelfView" class="bookshelf-view">
+      <header class="shelf-header">
+        <div class="shelf-brand">
+          <img src="./favicon.svg" alt="Logo" class="shelf-logo">
+          <div>
+            <div class="shelf-title">我的云端书架</div>
+            <div class="shelf-subtitle" id="shelfStats">多端实时同步 · 正在连接云端...</div>
+          </div>
+        </div>
+
+        <div class="shelf-actions">
+          <input type="text" id="shelfSearchInput" class="shelf-search" placeholder="搜索书名...">
+          <label for="shelfFileInput" class="btn-primary" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+            <span>上传新书</span>
+          </label>
+          <input id="shelfFileInput" type="file" accept=".pdf,.epub" style="display: none;">
+          <button id="shelfThemeBtn" class="btn-icon" data-tooltip="切换主题">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <main class="shelf-content">
+        <div id="shelfLoading" class="shelf-loading" style="display: none;">
+          <div class="spinner"></div>
+          <span id="shelfLoadingText">正在同步云端书架...</span>
+        </div>
+        <div id="shelfGrid" class="shelf-grid"></div>
+      </main>
     </div>
 
     <!-- Notification Toast -->

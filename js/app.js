@@ -31,6 +31,8 @@
   // App State
   const state = {
     docType: 'pdf', // 'pdf' | 'epub'
+    currentBookId: null,
+    cloudBooks: [],
     pdfDoc: null,
     pdfData: null,
     epubBook: null,
@@ -99,6 +101,16 @@
     epubFooterTitle: document.getElementById('epubFooterTitle'),
     epubFooterProgress: document.getElementById('epubFooterProgress'),
     openSampleEpubBtn: document.getElementById('openSampleEpubBtn'),
+    // Bookshelf Elements
+    bookshelfView: document.getElementById('bookshelfView'),
+    shelfGrid: document.getElementById('shelfGrid'),
+    shelfLoading: document.getElementById('shelfLoading'),
+    shelfLoadingText: document.getElementById('shelfLoadingText'),
+    shelfStats: document.getElementById('shelfStats'),
+    shelfSearchInput: document.getElementById('shelfSearchInput'),
+    shelfFileInput: document.getElementById('shelfFileInput'),
+    shelfThemeBtn: document.getElementById('shelfThemeBtn'),
+    btnBackToShelf: document.getElementById('btnBackToShelf'),
 
     // Zoom & View
     zoomOutBtn: document.getElementById('zoomOutBtn'),
@@ -167,6 +179,11 @@
   // Reading Progress Memory (断点续读)
   let progressDebounceTimer = null;
   function saveReadingProgress() {
+    if (state.currentBookId && window.CloudService) {
+      const pct = Math.round((state.currentPage / Math.max(1, state.totalPages)) * 100);
+      window.CloudService.updateProgress(state.currentBookId, pct, state.currentPage, state.totalPages);
+    }
+
     clearTimeout(progressDebounceTimer);
     progressDebounceTimer = setTimeout(() => {
       if (!state.pdfDoc || state.totalPages <= 1) return;
@@ -1549,7 +1566,205 @@
   }
 
   // Bind UI Events
+  
+  // ==========================================================================
+  // Bookshelf & Cloud Sync
+  // ==========================================================================
+  function showBookshelf() {
+    if (!DOM.bookshelfView) return;
+    DOM.bookshelfView.classList.remove('hidden');
+    refreshBookshelf();
+  }
+
+  function hideBookshelf() {
+    if (!DOM.bookshelfView) return;
+    DOM.bookshelfView.classList.add('hidden');
+  }
+
+  async function refreshBookshelf() {
+    if (!window.CloudService || !DOM.shelfGrid) return;
+    DOM.shelfLoading.style.display = 'flex';
+    DOM.shelfLoadingText.textContent = '正在同步云端书架...';
+
+    try {
+      const books = await window.CloudService.listBooks();
+      state.cloudBooks = books;
+      renderBookshelf(books);
+      DOM.shelfStats.textContent = '云端同步 · 共 ' + books.length + ' 本书';
+    } catch (err) {
+      console.warn('Failed to load books from Supabase:', err);
+      DOM.shelfStats.textContent = '云端表尚未初始化或正在连接...';
+      renderBookshelfEmptyState(err);
+    } finally {
+      DOM.shelfLoading.style.display = 'none';
+    }
+  }
+
+  function renderBookshelf(books) {
+    if (!DOM.shelfGrid) return;
+    DOM.shelfGrid.innerHTML = '';
+
+    if (!books || books.length === 0) {
+      DOM.shelfGrid.innerHTML = `
+        <div class="shelf-empty">
+          <svg style="width:48px;height:48px;margin:0 auto 12px;opacity:0.4;display:block;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z"/></svg>
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px;">书架还没有书籍</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">点击右上角【上传新书】或直接把 PDF / EPUB 拖入窗口</div>
+          <button id="btnShelfOpenSample" class="btn-primary" style="font-size:12px;padding:6px 14px;">体验内置演示书</button>
+        </div>
+      `;
+      const btn = document.getElementById('btnShelfOpenSample');
+      if (btn) btn.addEventListener('click', () => { hideBookshelf(); loadDocument('./sample.pdf', 'Sample Document.pdf'); });
+      return;
+    }
+
+    books.forEach(book => {
+      const card = document.createElement('div');
+      card.className = 'book-card';
+      const pct = book.progress_percent || 0;
+      const sizeStr = (book.file_size / (1024 * 1024)).toFixed(1) + ' MB';
+
+      card.innerHTML = `
+        <div class="book-cover-wrapper">
+          ${book.cover_url ? '<img src="' + book.cover_url + '" class="book-cover-img" alt="' + book.title + '"/>' :
+            '<div class="book-cover-placeholder"><div style="font-size:12px;font-weight:600;">' + book.title + '</div></div>'
+          }
+          <span class="book-badge">${book.format}</span>
+        </div>
+        <div class="book-details">
+          <div class="book-card-title" title="${book.title}">${book.title}</div>
+          <div class="book-progress-track">
+            <div class="book-progress-fill" style="width: ${pct}%"></div>
+          </div>
+          <div class="book-card-meta">
+            <span>${pct > 0 ? '已读 ' + pct + '%' : '未读'}</span>
+            <span>${sizeStr}</span>
+          </div>
+          <div class="book-card-actions">
+            <span class="book-btn-read">继续阅读 →</span>
+            <button class="book-btn-delete" title="从云端删除">删除</button>
+          </div>
+        </div>
+      `;
+
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.book-btn-delete')) return;
+        openCloudBook(book);
+      });
+
+      const delBtn = card.querySelector('.book-btn-delete');
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (confirm('确定要从云端删除《' + book.title + '》吗？')) {
+          showToast('正在删除...');
+          try {
+            await window.CloudService.deleteBook(book);
+            showToast('已删除书籍');
+            refreshBookshelf();
+          } catch (err) {
+            showToast('删除失败：' + err.message);
+          }
+        }
+      });
+
+      DOM.shelfGrid.appendChild(card);
+    });
+  }
+
+  function renderBookshelfEmptyState(err) {
+    if (!DOM.shelfGrid) return;
+    DOM.shelfGrid.innerHTML = `
+      <div class="shelf-empty">
+        <svg style="width:40px;height:40px;margin:0 auto 10px;color:#f59e0b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;">云端数据库尚未执行建表语句</div>
+        <div style="font-size:12px;color:var(--text-muted);max-width:440px;margin:0 auto 14px;line-height:1.6;">
+          请在 Supabase 后台的 SQL Editor 中粘贴运行建表 SQL 脚本即可激活多端同步功能。
+        </div>
+        <button id="btnFallbackLocal" class="btn-secondary" style="font-size:12px;">直接本地离线阅读</button>
+      </div>
+    `;
+    const btn = document.getElementById('btnFallbackLocal');
+    if (btn) btn.addEventListener('click', hideBookshelf);
+  }
+
+  async function openCloudBook(book) {
+    state.currentBookId = book.id;
+    hideBookshelf();
+    showToast('正在打开《' + book.title + '》...', 2000);
+
+    const fileUrl = window.CloudService.getBookFileUrl(book.file_path);
+    if (!fileUrl) {
+      showToast('获取文件链接失败');
+      return;
+    }
+
+    try {
+      const resp = await fetch(fileUrl);
+      const arrayBuffer = await resp.arrayBuffer();
+      const fileName = book.file_name || (book.title + '.' + book.format);
+      if (book.format === 'epub') {
+        await loadEPUB(arrayBuffer, fileName);
+        if (book.current_location && book.current_location !== '1') {
+          setTimeout(() => {
+            if (state.epubRendition) state.epubRendition.display(book.current_location);
+          }, 400);
+        }
+      } else {
+        await loadPDF(new Uint8Array(arrayBuffer), fileName);
+        if (book.current_location) {
+          const page = parseInt(book.current_location, 10);
+          if (page && page > 1) {
+            setTimeout(() => goToPage(page), 400);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to download cloud book:', e);
+      showToast('下载文件失败，请检查网络或 Bucket 权限');
+    }
+  }
+
+  async function handleShelfUpload(file) {
+    if (!file) return;
+    DOM.shelfLoading.style.display = 'flex';
+    DOM.shelfLoadingText.textContent = '正在解析并上传书籍...';
+
+    try {
+      await window.CloudService.uploadBook(file, (pct, status) => {
+        DOM.shelfLoadingText.textContent = status || ('正在上传... ' + pct + '%');
+      });
+      showToast('上传成功！电脑与手机均可同步阅读');
+      refreshBookshelf();
+    } catch (err) {
+      console.error('Upload failed:', err);
+      showToast('上传失败：' + (err.message || '未知错误'), 4000);
+    } finally {
+      DOM.shelfLoading.style.display = 'none';
+    }
+  }
+
   function bindEvents() {
+    // Bookshelf Bindings
+    if (DOM.btnBackToShelf) {
+      DOM.btnBackToShelf.addEventListener('click', showBookshelf);
+    }
+    if (DOM.shelfThemeBtn) {
+      DOM.shelfThemeBtn.addEventListener('click', cycleTheme);
+    }
+    if (DOM.shelfFileInput) {
+      DOM.shelfFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) handleShelfUpload(file);
+      });
+    }
+    if (DOM.shelfSearchInput) {
+      DOM.shelfSearchInput.addEventListener('input', (e) => {
+        const q = e.target.value.toLowerCase().trim();
+        const filtered = state.cloudBooks.filter(b => b.title.toLowerCase().includes(q));
+        renderBookshelf(filtered);
+      });
+    }
+
     DOM.pageInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const val = parseInt(DOM.pageInput.value, 10);
@@ -1848,7 +2063,11 @@
   function init() {
     applyTheme(state.theme);
     bindEvents();
-    loadPDF('./sample.pdf', 'Sample Document.pdf');
+    if (window.CloudService && window.CloudService.isConfigured()) {
+      showBookshelf();
+    } else {
+      loadPDF('./sample.pdf', 'Sample Document.pdf');
+    }
   }
 
   if (document.readyState === 'loading') {
