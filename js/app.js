@@ -235,27 +235,121 @@ function showToast(text, duration = 2200) {
     applyTheme(themes[nextIdx]);
   }
 
-  // Reading Progress Memory (断点续读)
-  let progressDebounceTimer = null;
-  function saveReadingProgress() {
-    if (state.currentBookId && window.CloudService) {
-      const pct = Math.round((state.currentPage / Math.max(1, state.totalPages)) * 100);
-      window.CloudService.updateProgress(state.currentBookId, pct, state.currentPage, state.totalPages);
+  // Reading Progress Memory & Multi-device Cloud Sync (断点续读与多端进度同步)
+  function calculateCurrentProgress() {
+    let pct = 0;
+    let loc = '1';
+    let total = '?';
+
+    if (state.docType === 'epub') {
+      if (!state.epubRendition || !state.epubLocation || !state.epubLocation.start) {
+        return null;
+      }
+      loc = state.epubLocation.start.cfi || '1';
+
+      // 1. Try accurate locations percentage if generated
+      if (state.epubBook && state.epubBook.locations && state.epubBook.locations.length() > 0) {
+        const cfiPct = state.epubBook.locations.percentageFromCfi(loc);
+        if (typeof cfiPct === 'number' && !isNaN(cfiPct)) {
+          pct = Math.round(cfiPct * 100);
+        }
+      }
+      // 2. Try location.start.percentage
+      if (pct === 0 && state.epubLocation.start.percentage) {
+        pct = Math.round(state.epubLocation.start.percentage * 100);
+      }
+      // 3. Fallback: Spine/Chapter index percentage (immediate, zero wait)
+      if (pct === 0 && state.epubBook && state.epubBook.spine && state.epubBook.spine.items) {
+        const totalSpine = state.epubBook.spine.items.length;
+        const currentSpineIdx = state.epubLocation.start.index !== undefined ? state.epubLocation.start.index : 0;
+        if (totalSpine > 0) {
+          pct = Math.round(((currentSpineIdx + 1) / totalSpine) * 100);
+        }
+      }
+
+      // If user has navigated into the book but pct is rounded to 0, mark as at least 1%
+      if (pct === 0 && loc && loc !== '1') {
+        const spineIdx = state.epubLocation.start.index || 0;
+        if (spineIdx > 0 || (state.epubLocation.start.displayed && state.epubLocation.start.displayed.page > 1)) {
+          pct = 1;
+        }
+      }
+
+      const totalSpine = (state.epubBook && state.epubBook.spine && state.epubBook.spine.items) ? state.epubBook.spine.items.length : 0;
+      total = totalSpine ? (totalSpine + ' 节') : 'EPUB';
+
+    } else {
+      // PDF mode
+      if (!state.pdfDoc || state.totalPages < 1) return null;
+      loc = String(state.currentPage || 1);
+      total = String(state.totalPages);
+      const rawPct = (state.currentPage / Math.max(1, state.totalPages)) * 100;
+      pct = Math.round(rawPct);
+      if (pct === 0 && state.currentPage > 1) {
+        pct = 1;
+      }
     }
 
-    clearTimeout(progressDebounceTimer);
-    progressDebounceTimer = setTimeout(() => {
-      if (!state.pdfDoc || state.totalPages <= 1) return;
+    pct = Math.max(0, Math.min(100, pct));
+    return { pct, loc, total };
+  }
+
+  let cloudSyncTimer = null;
+  function syncReadingProgress(immediate = false) {
+    const progress = calculateCurrentProgress();
+    if (!progress) return;
+
+    const { pct, loc, total } = progress;
+
+    // 1. Local Storage persistence
+    if (state.docType === 'epub') {
+      if (loc && loc !== '1') {
+        localStorage.setItem('clean_epub_progress_' + state.fileName, loc);
+      }
+    } else {
       try {
         const key = 'clean_pdf_progress_' + state.fileName;
-        const progress = {
+        localStorage.setItem(key, JSON.stringify({
           pageNum: state.currentPage,
           scrollTop: DOM.viewport.scrollTop,
           timestamp: Date.now()
-        };
-        localStorage.setItem(key, JSON.stringify(progress));
+        }));
       } catch (e) {}
-    }, 400);
+    }
+
+    // 2. In-memory bookshelf update (immediate UI sync upon returning to bookshelf)
+    if (state.currentBookId && state.cloudBooks) {
+      const book = state.cloudBooks.find(b => b.id === state.currentBookId);
+      if (book) {
+        book.progress_percent = pct;
+        book.current_location = loc;
+        book.total_pages = total;
+        book.last_read_at = new Date().toISOString();
+      }
+    }
+
+    // 3. Cloud Supabase Sync with Debounce
+    if (!state.currentBookId || !window.CloudService) return;
+
+    if (cloudSyncTimer) {
+      clearTimeout(cloudSyncTimer);
+      cloudSyncTimer = null;
+    }
+
+    const doSync = () => {
+      window.CloudService.updateProgress(state.currentBookId, pct, loc, total)
+        .catch(err => console.warn('Supabase updateProgress failed:', err));
+    };
+
+    if (immediate) {
+      doSync();
+    } else {
+      cloudSyncTimer = setTimeout(doSync, 1000);
+    }
+  }
+
+  function saveReadingProgress(immediate = false) {
+    syncReadingProgress(immediate);
   }
 
   function restoreReadingProgress() {
@@ -638,16 +732,11 @@ function showToast(text, duration = 2200) {
   function updateEpubProgressDisplay() {
     if (!state.epubRendition || !state.epubLocation) return;
     const loc = state.epubLocation;
-    let pct = 0;
-    if (state.epubBook && state.epubBook.locations && state.epubBook.locations.length() > 0 && loc.start) {
-      pct = Math.round(state.epubBook.locations.percentageFromCfi(loc.start.cfi) * 100);
-    } else if (loc.start && loc.start.percentage) {
-      pct = Math.round(loc.start.percentage * 100);
-    }
-    pct = Math.max(0, Math.min(100, pct));
+    const progress = calculateCurrentProgress();
+    const pct = progress ? progress.pct : 0;
 
-    const currentPage = loc.start && loc.start.displayed ? loc.start.displayed.page : 1;
-    const totalPages = loc.start && loc.start.displayed ? loc.start.displayed.total : '?';
+    const currentPage = (loc.start && loc.start.displayed) ? loc.start.displayed.page : (loc.start && loc.start.index !== undefined ? loc.start.index + 1 : 1);
+    const totalPages = (loc.start && loc.start.displayed) ? loc.start.displayed.total : (state.epubBook && state.epubBook.spine && state.epubBook.spine.items ? state.epubBook.spine.items.length : '?');
 
     DOM.pageInput.value = currentPage;
     DOM.pageCount.textContent = `/ ${totalPages} (${pct}%)`;
@@ -724,7 +813,7 @@ function showToast(text, duration = 2200) {
     DOM.outlineView.appendChild(ul);
   }
 
-  async function loadEPUB(data, fileName) {
+  async function loadEPUB(data, fileName, initialLocation = null) {
     try {
       showToast('正在加载 EPUB 电子书...', 1500);
 
@@ -769,10 +858,11 @@ function showToast(text, duration = 2200) {
       // Restore Reading Progress (CFI)
       const key = 'clean_epub_progress_' + state.fileName;
       const savedCfi = localStorage.getItem(key);
+      const targetCfi = (initialLocation && initialLocation !== '1') ? initialLocation : savedCfi;
 
-      await state.epubRendition.display(savedCfi || undefined);
-      if (savedCfi) {
-        showToast('已恢复上次 EPUB 阅读进度', 2500);
+      await state.epubRendition.display(targetCfi || undefined);
+      if (targetCfi) {
+        showToast('已恢复阅读进度', 2200);
       }
 
       // Generate locations for percentage calculation
@@ -780,6 +870,7 @@ function showToast(text, duration = 2200) {
         return state.epubBook.locations.generate(1000);
       }).then(() => {
         updateEpubProgressDisplay();
+        syncReadingProgress(false);
       }).catch(() => {});
 
       // Metadata & Title
@@ -800,9 +891,8 @@ function showToast(text, duration = 2200) {
       state.epubRendition.on('relocated', (location) => {
         state.epubLocation = location;
         if (location && location.start) {
-          const cfi = location.start.cfi;
-          localStorage.setItem('clean_epub_progress_' + state.fileName, cfi);
           updateEpubProgressDisplay();
+          syncReadingProgress(false);
         }
       });
 
@@ -870,7 +960,7 @@ function showToast(text, duration = 2200) {
     }
   }
 
-  async function loadPDF(source, name = 'Document.pdf') {
+  async function loadPDF(source, name = 'Document.pdf', initialPage = null) {
     try {
       state.docType = 'pdf';
       DOM.fitWidthBtn.style.display = '';
@@ -935,7 +1025,12 @@ function showToast(text, duration = 2200) {
       showLoading(false);
 
       // Auto-restore reading progress if available
-      restoreReadingProgress();
+      if (initialPage && initialPage > 1 && initialPage <= state.totalPages) {
+        goToPage(initialPage);
+        showToast(`已恢复阅读进度：第 ${initialPage} 页`, 2200);
+      } else {
+        restoreReadingProgress();
+      }
     } catch (err) {
       console.error('Error loading PDF:', err);
       showLoading(false);
@@ -1688,10 +1783,37 @@ function showToast(text, duration = 2200) {
     `;
   }
 
+  function getBookProgressInfo(book) {
+    let pct = Number(book.progress_percent) || 0;
+    const loc = book.current_location;
+    // Check if user has read into the book
+    const hasRead = pct > 0 || (loc && loc !== '1' && loc !== 'null' && loc !== '' && loc !== undefined);
+
+    if (pct === 0 && hasRead) {
+      pct = 1; // Started reading, ensure at least 1%
+    }
+
+    const isDone = pct >= 100;
+    const isReading = pct > 0 && pct < 100;
+
+    let label = '未读';
+    let pillClass = 'unread';
+
+    if (isDone) {
+      label = '已读完';
+      pillClass = 'done';
+    } else if (isReading) {
+      label = '已读 ' + pct + '%';
+      pillClass = 'reading';
+    }
+
+    return { pct, label, pillClass, isReading, isDone };
+  }
+
   function updateShelfCounts(books) {
     if (!books) return;
     const all = books.length;
-    const reading = books.filter(b => (b.progress_percent > 0 && b.progress_percent < 100)).length;
+    const reading = books.filter(b => getBookProgressInfo(b).isReading).length;
     const epub = books.filter(b => b.format === 'epub').length;
     const pdf = books.filter(b => b.format === 'pdf').length;
 
@@ -1706,7 +1828,7 @@ function showToast(text, duration = 2200) {
     const filter = state.shelfFilter || 'all';
 
     if (filter === 'reading') {
-      list = list.filter(b => b.progress_percent > 0 && b.progress_percent < 100);
+      list = list.filter(b => getBookProgressInfo(b).isReading);
     } else if (filter === 'epub') {
       list = list.filter(b => b.format === 'epub');
     } else if (filter === 'pdf') {
@@ -1768,7 +1890,7 @@ function showToast(text, duration = 2200) {
     books.forEach(book => {
       const card = document.createElement('div');
       card.className = 'book-card';
-      const pct = book.progress_percent || 0;
+      const info = getBookProgressInfo(book);
       const sizeStr = (book.file_size / (1024 * 1024)).toFixed(1) + ' MB';
       const isList = state.shelfViewMode === 'list';
 
@@ -1783,8 +1905,13 @@ function showToast(text, duration = 2200) {
               <span class="book-badge" style="position:static;display:inline-block;margin-right:6px;">${book.format}</span>
               <span>${sizeStr}</span>
               <span style="margin: 0 4px;">·</span>
-              <span class="book-progress-pill ${pct === 100 ? 'done' : ''}">${pct > 0 ? '已读 ' + pct + '%' : '未读'}</span>
+              <span class="book-progress-pill ${info.pillClass}">${info.label}</span>
             </div>
+            ${info.pct > 0 ? `
+              <div class="book-card-progress-bar">
+                <div class="book-card-progress-fill ${info.isDone ? 'done' : ''}" style="width: ${info.pct}%"></div>
+              </div>
+            ` : ''}
           </div>
           <div class="book-list-actions">
             <span class="btn-small" style="color:var(--accent-color);font-weight:600;">阅读</span>
@@ -1798,11 +1925,16 @@ function showToast(text, duration = 2200) {
           <div class="book-jacket">
             ${renderBookCoverHtml(book)}
             <span class="book-badge">${book.format}</span>
+            ${info.pct > 0 ? `
+              <div class="book-card-progress-bar jacket-bar">
+                <div class="book-card-progress-fill ${info.isDone ? 'done' : ''}" style="width: ${info.pct}%"></div>
+              </div>
+            ` : ''}
           </div>
           <div class="book-info">
             <div class="book-title-text" title="${book.title}">${book.title}</div>
             <div class="book-meta-row">
-              <span class="book-progress-pill ${pct === 100 ? 'done' : ''}">${pct > 0 ? '已读 ' + pct + '%' : '未读'}</span>
+              <span class="book-progress-pill ${info.pillClass}">${info.label}</span>
               <button class="book-delete-icon" title="从云端删除">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
               </button>
@@ -1876,12 +2008,7 @@ function showToast(text, duration = 2200) {
       const fileName = book.file_name || (book.title + '.' + book.format);
 
       if (book.format === 'epub') {
-        await loadEPUB(arrayBuffer, fileName);
-        if (book.current_location && book.current_location !== '1') {
-          setTimeout(() => {
-            if (state.epubRendition) state.epubRendition.display(book.current_location);
-          }, 400);
-        }
+        await loadEPUB(arrayBuffer, fileName, book.current_location);
         // Self-healing: if cover was broken blob or missing, update it now!
         if (!book.cover_url || book.cover_url.startsWith('blob:')) {
           generateEpubCover(arrayBuffer.slice(0)).then(newCover => {
@@ -1892,13 +2019,8 @@ function showToast(text, duration = 2200) {
           });
         }
       } else {
-        await loadPDF(new Uint8Array(arrayBuffer), fileName);
-        if (book.current_location) {
-          const page = parseInt(book.current_location, 10);
-          if (page && page > 1) {
-            setTimeout(() => goToPage(page), 400);
-          }
-        }
+        const initialPage = book.current_location ? parseInt(book.current_location, 10) : null;
+        await loadPDF(new Uint8Array(arrayBuffer), fileName, initialPage);
         // Self-healing cover for PDF
         if (!book.cover_url || book.cover_url.startsWith('blob:')) {
           generatePdfCover(arrayBuffer.slice(0)).then(newCover => {
@@ -1958,8 +2080,21 @@ function showToast(text, duration = 2200) {
     });
 
     if (DOM.btnBackToShelf) {
-      DOM.btnBackToShelf.addEventListener('click', showBookshelf);
+      DOM.btnBackToShelf.addEventListener('click', () => {
+        syncReadingProgress(true);
+        showBookshelf();
+      });
     }
+
+    // Flush progress on tab hide / browser unload
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        syncReadingProgress(true);
+      }
+    });
+    window.addEventListener('beforeunload', () => {
+      syncReadingProgress(true);
+    });
     if (DOM.shelfThemeBtn) {
       DOM.shelfThemeBtn.addEventListener('click', cycleTheme);
     }
@@ -2057,8 +2192,6 @@ function showToast(text, duration = 2200) {
     // Real-time Scroll Listener for Content & TOC Synchronization & Progress Save
     let scrollTicking = false;
     DOM.viewport.addEventListener('scroll', () => {
-      saveReadingProgress();
-
       if (state.isProgrammaticScrolling) return;
       if (scrollTicking) return;
       scrollTicking = true;
@@ -2071,6 +2204,7 @@ function showToast(text, duration = 2200) {
             DOM.pageInput.value = activePage;
             updateActiveThumbnail();
             updateActiveOutline(activePage);
+            saveReadingProgress(false);
           }
         }
       });

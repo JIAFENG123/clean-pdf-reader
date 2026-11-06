@@ -188,7 +188,11 @@
         updateData.total_pages = String(totalPages);
       }
 
-      await sb.from('books').update(updateData).eq('id', bookId);
+      const { data, error } = await sb.from('books').update(updateData).eq('id', bookId);
+      if (error) {
+        console.warn('Supabase updateProgress error:', error);
+      }
+      return data;
     },
 
     getBookFileUrl: function (filePath) {
