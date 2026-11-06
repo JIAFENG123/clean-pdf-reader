@@ -11,13 +11,13 @@
   <link rel="alternate icon" href="./favicon.svg">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <link rel="manifest" href="./manifest.json">
-  <link rel="stylesheet" href="./css/style.css">
+  <link rel="stylesheet" href="./css/style.css?v=6">
   <script src="./lib/jszip.min.js"></script>
   <script src="./lib/epub.min.js"></script>
   <script src="./lib/pdf.min.js"></script>
   <script src="./lib/supabase.min.js"></script>
-  <script src="./js/config.js?v=5"></script>
-  <script src="./js/supabase-client.js?v=5"></script>
+  <script src="./js/config.js?v=6"></script>
+  <script src="./js/supabase-client.js?v=6"></script>
 </head>
 <body>
   <div id="app" class="app-container">
@@ -225,6 +225,9 @@
 
         <div class="shelf-actions">
           <input type="text" id="shelfSearchInput" class="shelf-search" placeholder="搜索书名...">
+          <button id="shelfViewToggleBtn" class="btn-icon" data-tooltip="切换画廊/列表视图">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+          </button>
           <label for="shelfFileInput" class="btn-primary" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
             <span>上传新书</span>
@@ -235,6 +238,16 @@
           </button>
         </div>
       </header>
+
+      <!-- Shelf Filter & View Mode Bar -->
+      <div class="shelf-filter-bar">
+        <div class="shelf-tabs">
+          <button class="shelf-tab-btn active" data-filter="all">全部 (<span id="countAll">0</span>)</button>
+          <button class="shelf-tab-btn" data-filter="reading">正在读 (<span id="countReading">0</span>)</button>
+          <button class="shelf-tab-btn" data-filter="epub">EPUB (<span id="countEpub">0</span>)</button>
+          <button class="shelf-tab-btn" data-filter="pdf">PDF (<span id="countPdf">0</span>)</button>
+        </div>
+      </div>
 
       <main class="shelf-content">
         <div id="shelfLoading" class="shelf-loading" style="display: none;">
@@ -250,6 +263,6 @@
 
   </div>
 
-  <script src="./js/app.js?v=5"></script>
+  <script src="./js/app.js?v=6"></script>
 </body>
 </html>

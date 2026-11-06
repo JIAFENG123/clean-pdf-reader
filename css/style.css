@@ -1338,83 +1338,216 @@ html, body {
   to { transform: rotate(360deg); }
 }
 
-.shelf-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
+.shelf-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 28px;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border-subtle);
+  user-select: none;
 }
 
+.shelf-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shelf-tab-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.shelf-tab-btn:hover {
+  background: var(--bg-toolbar-hover);
+  color: var(--text-primary);
+}
+
+.shelf-tab-btn.active {
+  background: var(--accent-subtle);
+  border-color: rgba(37, 99, 235, 0.2);
+  color: var(--accent-color);
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   Bookshelf Grid & 3D Tactile Book Cards
+   ========================================================================== */
+.shelf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 28px 22px;
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 8px 0 40px;
+}
+
+/* Floating Book Card */
 .book-card {
-  background: var(--bg-sidebar);
-  border-radius: var(--ui-radius);
-  border: 1px solid var(--border-color);
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
-  transition: all 0.2s ease;
   cursor: pointer;
   position: relative;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .book-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
-  border-color: var(--accent-color);
+  transform: translateY(-6px);
 }
 
-.book-cover-wrapper {
+/* 3D Realistic Book Jacket */
+.book-jacket {
   position: relative;
   width: 100%;
-  aspect-ratio: 3 / 4;
-  background: var(--bg-app);
+  aspect-ratio: 1 / 1.44;
+  border-radius: 2px 8px 8px 2px;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  box-shadow: 
+    -2px 0 4px rgba(0, 0, 0, 0.1),
+    0 8px 22px -4px rgba(0, 0, 0, 0.16),
+    0 2px 6px -1px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.22s ease;
+  background-color: var(--bg-card);
+}
+
+.book-card:hover .book-jacket {
+  box-shadow: 
+    -3px 0 6px rgba(0, 0, 0, 0.15),
+    0 16px 32px -6px rgba(0, 0, 0, 0.24),
+    0 4px 10px -2px rgba(0, 0, 0, 0.12);
+}
+
+/* Tactile Spine Crease Highlight */
+.book-jacket::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 10px;
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.22) 0%,
+    rgba(0, 0, 0, 0.06) 40%,
+    rgba(255, 255, 255, 0.2) 75%,
+    transparent 100%
+  );
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* Right Page Edge Shading */
+.book-jacket::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 3px;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.1), transparent);
+  z-index: 4;
+  pointer-events: none;
 }
 
 .book-cover-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
-.book-cover-placeholder {
+/* Bespoke Editorial Typographic Fallback Cover */
+.book-cloth-cover {
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  justify-content: space-between;
+  padding: 16px 14px 14px 18px;
+  box-sizing: border-box;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+.book-cloth-frame {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   justify-content: center;
-  padding: 16px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 4px;
+  padding: 12px 10px;
+  box-sizing: border-box;
   text-align: center;
-  color: var(--text-secondary);
+  position: relative;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.cloth-title {
+  font-family: Georgia, "Songti SC", "SimSun", serif;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  max-height: 4.2em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.cloth-format {
+  margin-top: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.75);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 6px;
+  width: 80%;
 }
 
 .book-badge {
   position: absolute;
   top: 8px;
   right: 8px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
-  background: rgba(24, 24, 27, 0.8);
+  background: rgba(18, 18, 20, 0.75);
+  backdrop-filter: blur(4px);
   color: #fff;
   letter-spacing: 0.5px;
+  z-index: 5;
 }
 
-.book-details {
-  padding: 12px;
+/* Below-Book Meta (Clean, Non-Intrusive) */
+.book-info {
+  margin-top: 10px;
   display: flex;
   flex-direction: column;
-  flex: 1;
 }
 
-.book-card-title {
-  font-size: 13px;
+.book-title-text {
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
   line-height: 1.4;
@@ -1424,61 +1557,99 @@ html, body {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  margin-bottom: 4px;
+}
+
+.book-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.book-progress-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.book-progress-pill.done {
+  color: #10b981;
+}
+
+.book-delete-icon {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.15s ease;
+}
+
+.book-delete-icon:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ==========================================================================
+   List View Mode (Spacious & Minimalist)
+   ========================================================================== */
+.shelf-grid.list-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 900px;
+}
+
+.shelf-grid.list-view .book-card {
+  flex-direction: row;
+  align-items: center;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: var(--ui-radius);
+  padding: 12px 18px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  gap: 16px;
+  transform: none;
+}
+
+.shelf-grid.list-view .book-card:hover {
+  transform: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.shelf-grid.list-view .book-jacket {
+  width: 48px;
+  height: 68px;
+  flex-shrink: 0;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+}
+
+.shelf-grid.list-view .book-info {
+  margin-top: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.shelf-grid.list-view .book-title-text {
+  font-size: 14px;
+  -webkit-line-clamp: 1;
   margin-bottom: 6px;
 }
 
-.book-card-meta {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: auto;
-  margin-bottom: 8px;
+.shelf-grid.list-view .book-list-actions {
   display: flex;
-  justify-content: space-between;
-}
-
-.book-progress-track {
-  width: 100%;
-  height: 4px;
-  background: var(--border-color);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-
-.book-progress-fill {
-  height: 100%;
-  background: var(--accent-color);
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-.book-card-actions {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 8px;
-}
-
-.book-btn-read {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent-color);
-}
-
-.book-btn-delete {
-  font-size: 11px;
-  color: var(--text-muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
-}
-
-.book-btn-delete:hover {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
+  gap: 12px;
+  margin-left: auto;
 }
 
 .shelf-empty {
@@ -1487,5 +1658,29 @@ html, body {
   padding: 80px 20px;
   color: var(--text-muted);
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 600px) {
+  .shelf-header {
+    padding: 0 16px;
+  }
+  .shelf-search {
+    width: 110px;
+  }
+  .shelf-search:focus {
+    width: 140px;
+  }
+  .shelf-filter-bar {
+    padding: 8px 16px;
+  }
+  .shelf-content {
+    padding: 20px 16px;
+  }
+  .shelf-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px 14px;
+  }
+}
+
 
 

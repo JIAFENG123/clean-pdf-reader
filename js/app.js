@@ -33,6 +33,8 @@
     docType: 'pdf', // 'pdf' | 'epub'
     currentBookId: null,
     cloudBooks: [],
+    shelfViewMode: localStorage.getItem('clean_shelf_view_mode') || 'gallery',
+    shelfFilter: 'all',
     pdfDoc: null,
     pdfData: null,
     epubBook: null,
@@ -111,6 +113,11 @@
     shelfFileInput: document.getElementById('shelfFileInput'),
     shelfThemeBtn: document.getElementById('shelfThemeBtn'),
     btnBackToShelf: document.getElementById('btnBackToShelf'),
+    shelfViewToggleBtn: document.getElementById('shelfViewToggleBtn'),
+    countAll: document.getElementById('countAll'),
+    countReading: document.getElementById('countReading'),
+    countEpub: document.getElementById('countEpub'),
+    countPdf: document.getElementById('countPdf'),
 
     // Zoom & View
     zoomOutBtn: document.getElementById('zoomOutBtn'),
@@ -1570,6 +1577,10 @@
   // ==========================================================================
   // Bookshelf & Cloud Sync
   // ==========================================================================
+  
+  // ==========================================================================
+  // Upgraded Bookshelf & Cloud Sync Logic
+  // ==========================================================================
   function showBookshelf() {
     if (!DOM.bookshelfView) return;
     DOM.bookshelfView.classList.remove('hidden');
@@ -1581,6 +1592,76 @@
     DOM.bookshelfView.classList.add('hidden');
   }
 
+  // Classic Editorial Cloth Cover Palette (Penguin / Faber inspired)
+  function getClothCoverStyle(title) {
+    const palettes = [
+      { bg: 'linear-gradient(145deg, #1e293b 0%, #0f172a 100%)', border: 'rgba(148, 163, 184, 0.35)' },
+      { bg: 'linear-gradient(145deg, #701a28 0%, #450a0a 100%)', border: 'rgba(254, 205, 211, 0.35)' },
+      { bg: 'linear-gradient(145deg, #064e3b 0%, #022c22 100%)', border: 'rgba(167, 243, 208, 0.35)' },
+      { bg: 'linear-gradient(145deg, #78350f 0%, #451a03 100%)', border: 'rgba(253, 230, 138, 0.35)' },
+      { bg: 'linear-gradient(145deg, #334155 0%, #1e293b 100%)', border: 'rgba(203, 213, 225, 0.35)' },
+      { bg: 'linear-gradient(145deg, #4c1d95 0%, #2e1065 100%)', border: 'rgba(233, 213, 255, 0.35)' }
+    ];
+    let hash = 0;
+    const str = title || 'Book';
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return palettes[Math.abs(hash) % palettes.length];
+  }
+
+  function renderBookCoverHtml(book) {
+    const isBlob = book.cover_url && book.cover_url.startsWith('blob:');
+    const hasValidCover = book.cover_url && !isBlob;
+
+    if (hasValidCover) {
+      return '<img src="' + book.cover_url + '" class="book-cover-img" alt="' + book.title + '" loading="lazy"/>';
+    }
+
+    const style = getClothCoverStyle(book.title);
+    return `
+      <div class="book-cloth-cover" style="background: ${style.bg};">
+        <div class="book-cloth-frame" style="border-color: ${style.border};">
+          <div class="cloth-title">${book.title}</div>
+          <div class="cloth-format">${book.format ? book.format.toUpperCase() : 'BOOK'}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function updateShelfCounts(books) {
+    if (!books) return;
+    const all = books.length;
+    const reading = books.filter(b => (b.progress_percent > 0 && b.progress_percent < 100)).length;
+    const epub = books.filter(b => b.format === 'epub').length;
+    const pdf = books.filter(b => b.format === 'pdf').length;
+
+    if (DOM.countAll) DOM.countAll.textContent = all;
+    if (DOM.countReading) DOM.countReading.textContent = reading;
+    if (DOM.countEpub) DOM.countEpub.textContent = epub;
+    if (DOM.countPdf) DOM.countPdf.textContent = pdf;
+  }
+
+  function getFilteredBooks() {
+    let list = state.cloudBooks || [];
+    const filter = state.shelfFilter || 'all';
+
+    if (filter === 'reading') {
+      list = list.filter(b => b.progress_percent > 0 && b.progress_percent < 100);
+    } else if (filter === 'epub') {
+      list = list.filter(b => b.format === 'epub');
+    } else if (filter === 'pdf') {
+      list = list.filter(b => b.format === 'pdf');
+    }
+
+    if (DOM.shelfSearchInput) {
+      const q = DOM.shelfSearchInput.value.toLowerCase().trim();
+      if (q) list = list.filter(b => b.title.toLowerCase().includes(q));
+    }
+    return list;
+  }
+
   async function refreshBookshelf() {
     if (!window.CloudService || !DOM.shelfGrid) return;
     DOM.shelfLoading.style.display = 'flex';
@@ -1589,8 +1670,9 @@
     try {
       const books = await window.CloudService.listBooks();
       state.cloudBooks = books;
-      renderBookshelf(books);
-      DOM.shelfStats.textContent = '云端同步 · 共 ' + books.length + ' 本书';
+      updateShelfCounts(books);
+      renderBookshelf(getFilteredBooks());
+      DOM.shelfStats.textContent = '多端实时同步 · 共 ' + books.length + ' 本书';
     } catch (err) {
       console.warn('Failed to load books from Supabase:', err);
       DOM.shelfStats.textContent = '云端表尚未初始化或正在连接...';
@@ -1604,13 +1686,20 @@
     if (!DOM.shelfGrid) return;
     DOM.shelfGrid.innerHTML = '';
 
+    // Apply list-view class if needed
+    if (state.shelfViewMode === 'list') {
+      DOM.shelfGrid.classList.add('list-view');
+    } else {
+      DOM.shelfGrid.classList.remove('list-view');
+    }
+
     if (!books || books.length === 0) {
       DOM.shelfGrid.innerHTML = `
         <div class="shelf-empty">
-          <svg style="width:48px;height:48px;margin:0 auto 12px;opacity:0.4;display:block;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z"/></svg>
-          <div style="font-size:14px;font-weight:600;margin-bottom:6px;">书架还没有书籍</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">点击右上角【上传新书】或直接把 PDF / EPUB 拖入窗口</div>
-          <button id="btnShelfOpenSample" class="btn-primary" style="font-size:12px;padding:6px 14px;">体验内置演示书</button>
+          <svg style="width:48px;height:48px;margin:0 auto 12px;opacity:0.35;display:block;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z"/></svg>
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px;">当前分类暂无书籍</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">点击右上角【上传新书】或把书籍文件直接拖入窗口</div>
+          <button id="btnShelfOpenSample" class="btn-primary" style="font-size:12px;padding:6px 14px;">打开内置演示书</button>
         </div>
       `;
       const btn = document.getElementById('btnShelfOpenSample');
@@ -1623,49 +1712,68 @@
       card.className = 'book-card';
       const pct = book.progress_percent || 0;
       const sizeStr = (book.file_size / (1024 * 1024)).toFixed(1) + ' MB';
+      const isList = state.shelfViewMode === 'list';
 
-      card.innerHTML = `
-        <div class="book-cover-wrapper">
-          ${book.cover_url ? '<img src="' + book.cover_url + '" class="book-cover-img" alt="' + book.title + '"/>' :
-            '<div class="book-cover-placeholder"><div style="font-size:12px;font-weight:600;">' + book.title + '</div></div>'
-          }
-          <span class="book-badge">${book.format}</span>
-        </div>
-        <div class="book-details">
-          <div class="book-card-title" title="${book.title}">${book.title}</div>
-          <div class="book-progress-track">
-            <div class="book-progress-fill" style="width: ${pct}%"></div>
+      if (isList) {
+        card.innerHTML = `
+          <div class="book-jacket">
+            ${renderBookCoverHtml(book)}
           </div>
-          <div class="book-card-meta">
-            <span>${pct > 0 ? '已读 ' + pct + '%' : '未读'}</span>
-            <span>${sizeStr}</span>
+          <div class="book-info">
+            <div class="book-title-text" title="${book.title}">${book.title}</div>
+            <div class="book-meta-row">
+              <span class="book-badge" style="position:static;display:inline-block;margin-right:6px;">${book.format}</span>
+              <span>${sizeStr}</span>
+              <span style="margin: 0 4px;">·</span>
+              <span class="book-progress-pill ${pct === 100 ? 'done' : ''}">${pct > 0 ? '已读 ' + pct + '%' : '未读'}</span>
+            </div>
           </div>
-          <div class="book-card-actions">
-            <span class="book-btn-read">继续阅读 →</span>
-            <button class="book-btn-delete" title="从云端删除">删除</button>
+          <div class="book-list-actions">
+            <span class="btn-small" style="color:var(--accent-color);font-weight:600;">阅读</span>
+            <button class="book-delete-icon" title="从云端删除">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
           </div>
-        </div>
-      `;
+        `;
+      } else {
+        card.innerHTML = `
+          <div class="book-jacket">
+            ${renderBookCoverHtml(book)}
+            <span class="book-badge">${book.format}</span>
+          </div>
+          <div class="book-info">
+            <div class="book-title-text" title="${book.title}">${book.title}</div>
+            <div class="book-meta-row">
+              <span class="book-progress-pill ${pct === 100 ? 'done' : ''}">${pct > 0 ? '已读 ' + pct + '%' : '未读'}</span>
+              <button class="book-delete-icon" title="从云端删除">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </div>
+          </div>
+        `;
+      }
 
       card.addEventListener('click', (e) => {
-        if (e.target.closest('.book-btn-delete')) return;
+        if (e.target.closest('.book-delete-icon')) return;
         openCloudBook(book);
       });
 
-      const delBtn = card.querySelector('.book-btn-delete');
-      delBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (confirm('确定要从云端删除《' + book.title + '》吗？')) {
-          showToast('正在删除...');
-          try {
-            await window.CloudService.deleteBook(book);
-            showToast('已删除书籍');
-            refreshBookshelf();
-          } catch (err) {
-            showToast('删除失败：' + err.message);
+      const delBtn = card.querySelector('.book-delete-icon');
+      if (delBtn) {
+        delBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (confirm('确定要从云端删除《' + book.title + '》吗？')) {
+            showToast('正在删除...');
+            try {
+              await window.CloudService.deleteBook(book);
+              showToast('已删除书籍');
+              refreshBookshelf();
+            } catch (err) {
+              showToast('删除失败：' + err.message);
+            }
           }
-        }
-      });
+        });
+      }
 
       DOM.shelfGrid.appendChild(card);
     });
@@ -1702,12 +1810,22 @@
       const resp = await fetch(fileUrl);
       const arrayBuffer = await resp.arrayBuffer();
       const fileName = book.file_name || (book.title + '.' + book.format);
+
       if (book.format === 'epub') {
         await loadEPUB(arrayBuffer, fileName);
         if (book.current_location && book.current_location !== '1') {
           setTimeout(() => {
             if (state.epubRendition) state.epubRendition.display(book.current_location);
           }, 400);
+        }
+        // Self-healing: if cover was broken blob or missing, update it now!
+        if (!book.cover_url || book.cover_url.startsWith('blob:')) {
+          generateEpubCover(arrayBuffer.slice(0)).then(newCover => {
+            if (newCover) {
+              const sb = window.supabase && window.supabase.createClient(window.CLOUD_CONFIG.SUPABASE_URL, window.CLOUD_CONFIG.SUPABASE_KEY);
+              if (sb) sb.from('books').update({ cover_url: newCover }).eq('id', book.id).then(() => {});
+            }
+          });
         }
       } else {
         await loadPDF(new Uint8Array(arrayBuffer), fileName);
@@ -1717,6 +1835,15 @@
             setTimeout(() => goToPage(page), 400);
           }
         }
+        // Self-healing cover for PDF
+        if (!book.cover_url || book.cover_url.startsWith('blob:')) {
+          generatePdfCover(arrayBuffer.slice(0)).then(newCover => {
+            if (newCover) {
+              const sb = window.supabase && window.supabase.createClient(window.CLOUD_CONFIG.SUPABASE_URL, window.CLOUD_CONFIG.SUPABASE_KEY);
+              if (sb) sb.from('books').update({ cover_url: newCover }).eq('id', book.id).then(() => {});
+            }
+          });
+        }
       }
     } catch (e) {
       console.error('Failed to download cloud book:', e);
@@ -1725,6 +1852,7 @@
   }
 
   async function handleShelfUpload(file) {
+
     if (!file) return;
     DOM.shelfLoading.style.display = 'flex';
     DOM.shelfLoadingText.textContent = '正在解析并上传书籍...';
@@ -1745,6 +1873,26 @@
 
   function bindEvents() {
     // Bookshelf Bindings
+    
+    // View Mode Toggle (Gallery vs List)
+    if (DOM.shelfViewToggleBtn) {
+      DOM.shelfViewToggleBtn.addEventListener('click', () => {
+        state.shelfViewMode = state.shelfViewMode === 'gallery' ? 'list' : 'gallery';
+        localStorage.setItem('clean_shelf_view_mode', state.shelfViewMode);
+        renderBookshelf(getFilteredBooks());
+      });
+    }
+
+    // Shelf Filter Tabs
+    document.querySelectorAll('.shelf-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.shelf-tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.shelfFilter = btn.dataset.filter || 'all';
+        renderBookshelf(getFilteredBooks());
+      });
+    });
+
     if (DOM.btnBackToShelf) {
       DOM.btnBackToShelf.addEventListener('click', showBookshelf);
     }

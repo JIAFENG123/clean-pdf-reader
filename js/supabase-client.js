@@ -34,14 +34,37 @@
     }
   }
 
-  // Generate cover thumbnail from EPUB
+  // Generate cover thumbnail from EPUB as permanent Base64 DataURL
   async function generateEpubCover(arrayBuffer) {
     try {
       if (!window.ePub) return null;
       const book = ePub(arrayBuffer);
       await book.ready;
-      const coverUrl = await book.coverUrl();
-      if (coverUrl) return coverUrl;
+      const tempBlobUrl = await book.coverUrl();
+      if (tempBlobUrl) {
+        // Convert temporary blob URL to permanent Base64 JPEG data URL
+        const base64 = await new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              const maxDim = 460;
+              const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+              canvas.width = Math.round(img.width * scale);
+              canvas.height = Math.round(img.height * scale);
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              resolve(canvas.toDataURL('image/jpeg', 0.82));
+            } catch (err) {
+              resolve(null);
+            }
+          };
+          img.onerror = () => resolve(null);
+          img.src = tempBlobUrl;
+        });
+        if (base64) return base64;
+      }
     } catch (e) {
       console.warn('Failed to generate EPUB cover:', e);
     }
