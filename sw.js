@@ -1,13 +1,13 @@
 // Clean Web Reader (PDF & EPUB & Cloud Bookshelf) Service Worker
-const CACHE_NAME = 'clean-reader-v12';
+const CACHE_NAME = 'clean-reader-v13';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './favicon.svg?v=12',
-  './css/style.css?v=12',
-  './js/config.js?v=12',
-  './js/supabase-client.js?v=12',
-  './js/app.js?v=12',
+  './favicon.svg?v=13',
+  './css/style.css?v=13',
+  './js/config.js?v=13',
+  './js/supabase-client.js?v=13',
+  './js/app.js?v=13',
   './lib/supabase.min.js',
   './lib/jszip.min.js',
   './lib/epub.min.js',
@@ -37,24 +37,33 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Cache first, network fallback
   if (event.request.method !== 'GET') return;
+
+  // HTML Navigation: Network-First to guarantee instant updates on reload
+  if (event.request.mode === 'navigate' || event.request.destination === 'document') {
+    event.respondWith(
+      fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return networkResponse;
+      }).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Cache first, network fallback for static assets
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
+      if (cachedResponse) return cachedResponse;
       return fetch(event.request).then((networkResponse) => {
         if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
           return networkResponse;
         }
         const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
         return networkResponse;
-      }).catch(() => {
-        // Return offline fallback if applicable
       });
     })
   );

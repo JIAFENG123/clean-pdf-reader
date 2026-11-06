@@ -1866,7 +1866,8 @@ html, body {
     height: 24px;
   }
 
-  /* Hide title & subtitle on mobile to keep header clean and prevent vertical wrapping */
+  /* Hide entire brand text container on mobile so only logo icon remains */
+  .shelf-brand-text,
   .shelf-title,
   .shelf-subtitle {
     display: none !important;
