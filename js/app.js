@@ -154,7 +154,59 @@
 
   // Toast Helper
   let toastTimer = null;
-  function showToast(text, duration = 2200) {
+    // Elegant Native-like Confirmation Modal
+  function showConfirmDialog({ title, message, confirmText = '确认删除', isDanger = true }) {
+    return new Promise((resolve) => {
+      const backdrop = document.getElementById('confirmModal');
+      const titleEl = document.getElementById('confirmModalTitle');
+      const descEl = document.getElementById('confirmModalMessage');
+      const btnOk = document.getElementById('btnConfirmOk');
+      const btnCancel = document.getElementById('btnConfirmCancel');
+
+      if (!backdrop) {
+        resolve(window.confirm(title + '\n' + message.replace(/<[^>]+>/g, '')));
+        return;
+      }
+
+      titleEl.textContent = title || '确认操作？';
+      descEl.innerHTML = message || '';
+      btnOk.textContent = confirmText;
+      btnOk.className = isDanger ? 'btn-danger' : 'btn-primary';
+
+      backdrop.style.display = 'flex';
+      backdrop.offsetHeight;
+      backdrop.classList.add('visible');
+
+      function cleanup(result) {
+        backdrop.classList.remove('visible');
+        setTimeout(() => { backdrop.style.display = 'none'; }, 220);
+        window.removeEventListener('keydown', onKeyDown);
+        btnOk.onclick = null;
+        btnCancel.onclick = null;
+        backdrop.onclick = null;
+        resolve(result);
+      }
+
+      function onKeyDown(e) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          cleanup(false);
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          cleanup(true);
+        }
+      }
+
+      btnOk.onclick = () => cleanup(true);
+      btnCancel.onclick = () => cleanup(false);
+      backdrop.onclick = (e) => {
+        if (e.target === backdrop) cleanup(false);
+      };
+      window.addEventListener('keydown', onKeyDown);
+    });
+  }
+
+function showToast(text, duration = 2200) {
     if (!DOM.toastMsg) return;
     DOM.toastMsg.innerHTML = text;
     DOM.toastMsg.classList.add('show');
