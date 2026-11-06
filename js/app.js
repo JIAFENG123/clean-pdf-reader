@@ -796,6 +796,9 @@ function showToast(text, duration = 2200) {
           if (DOM.epubFooterTitle && item.label) {
             DOM.epubFooterTitle.textContent = item.label.trim();
           }
+          if (window.innerWidth <= 768 && state.sidebarOpen && DOM.btnToggleSidebar) {
+            DOM.btnToggleSidebar.click();
+          }
         });
 
         container.appendChild(li);
@@ -854,6 +857,51 @@ function showToast(text, duration = 2200) {
 
       // Register themes
       applyEpubTheme(state.theme);
+
+      // Mobile Touch Swipe & Tap Navigation for EPUB
+      if (state.epubRendition.hooks && state.epubRendition.hooks.content) {
+        state.epubRendition.hooks.content.register((contents) => {
+          const doc = contents.document;
+          if (!doc) return;
+          let touchStartX = 0;
+          let touchStartY = 0;
+          let touchStartTime = 0;
+
+          doc.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+              touchStartX = e.touches[0].clientX;
+              touchStartY = e.touches[0].clientY;
+              touchStartTime = Date.now();
+            }
+          }, { passive: true });
+
+          doc.addEventListener('touchend', (e) => {
+            if (e.changedTouches.length === 1) {
+              const deltaX = e.changedTouches[0].clientX - touchStartX;
+              const deltaY = e.changedTouches[0].clientY - touchStartY;
+              const duration = Date.now() - touchStartTime;
+
+              // Horizontal Swipe (> 45px)
+              if (Math.abs(deltaX) > 45 && Math.abs(deltaY) < 60 && duration < 500) {
+                if (deltaX < 0) nextPage();
+                else prevPage();
+                return;
+              }
+
+              // Tap detection (without selection)
+              if (Math.abs(deltaX) < 15 && Math.abs(deltaY) < 15 && duration < 300) {
+                const sel = doc.getSelection();
+                if (sel && sel.toString().trim().length > 0) return;
+                const width = doc.documentElement.clientWidth || window.innerWidth;
+                const clickX = e.changedTouches[0].clientX;
+                if (clickX < width * 0.3) prevPage();
+                else if (clickX > width * 0.7) nextPage();
+                else if (DOM.toolbar) DOM.toolbar.classList.toggle('header-hidden');
+              }
+            }
+          }, { passive: true });
+        });
+      }
 
       // Restore Reading Progress (CFI)
       const key = 'clean_epub_progress_' + state.fileName;
@@ -1057,16 +1105,19 @@ function showToast(text, duration = 2200) {
   async function adjustScaleToContainer() {
     if (!state.pdfDoc) return;
     try {
-      const availableWidth = DOM.viewport.clientWidth - 80;
-      const availableHeight = DOM.viewport.clientHeight - 60;
+      const isMobile = window.innerWidth <= 768;
+      const paddingX = isMobile ? 12 : 80;
+      const paddingY = isMobile ? 20 : 60;
+      const availableWidth = DOM.viewport.clientWidth - paddingX;
+      const availableHeight = DOM.viewport.clientHeight - paddingY;
 
       if (state.fitMode === 'fit-width') {
         const targetWidth = Math.min(availableWidth, 860);
-        state.scale = Math.max(0.6, Math.min(2.0, targetWidth / state.basePageWidth));
+        state.scale = Math.max(0.25, Math.min(2.5, targetWidth / state.basePageWidth));
       } else if (state.fitMode === 'fit-page') {
         const scaleW = availableWidth / state.basePageWidth;
         const scaleH = availableHeight / state.basePageHeight;
-        state.scale = Math.max(0.4, Math.min(scaleW, scaleH));
+        state.scale = Math.max(0.2, Math.min(scaleW, scaleH));
       }
       updateZoomLabel();
     } catch (e) {
@@ -1458,6 +1509,9 @@ function showToast(text, duration = 2200) {
           goToPage(resolved.pageNum, resolved.y);
           document.querySelectorAll('.outline-item').forEach(el => el.classList.remove('active'));
           a.classList.add('active');
+          if (window.innerWidth <= 768 && state.sidebarOpen && DOM.btnToggleSidebar) {
+            DOM.btnToggleSidebar.click();
+          }
         }
       });
 

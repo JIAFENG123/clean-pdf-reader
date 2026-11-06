@@ -1702,26 +1702,252 @@ html, body {
   color: var(--text-muted);
 }
 
-/* Mobile Responsiveness */
+/* ==========================================================================
+   Comprehensive Mobile & Tablet Responsiveness
+   ========================================================================== */
+
+/* 1. Reader Mobile Toolbar, Sidebar Drawer & Fullscreen EPUB (< 768px) */
+@media (max-width: 768px) {
+  .app-header {
+    height: 46px;
+    min-height: 46px;
+    padding: 0 10px;
+    gap: 4px;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+  }
+
+  .app-header.header-hidden {
+    transform: translateY(-100%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .header-left {
+    gap: 4px;
+  }
+
+  .doc-title-badge {
+    max-width: 100px;
+    font-size: 11px;
+    padding: 2px 6px;
+  }
+
+  .doc-title-badge svg {
+    display: none;
+  }
+
+  .header-center {
+    max-width: none;
+    gap: 4px;
+  }
+
+  .page-control-group {
+    gap: 2px;
+  }
+
+  .page-input {
+    width: 32px;
+    height: 24px;
+    font-size: 11px;
+    padding: 0 2px;
+  }
+
+  .page-total {
+    font-size: 11px;
+  }
+
+  /* Hide Desktop Clutter on Mobile */
+  .zoom-group,
+  #fitWidthBtn,
+  #fitPageBtn,
+  #viewModeBtn,
+  #rotateBtn,
+  #fullscreenBtn,
+  .toolbar-divider,
+  label[for="fileInput"] {
+    display: none !important;
+  }
+
+  .header-right {
+    gap: 4px;
+  }
+
+  .btn-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Sidebar Drawer on Mobile */
+  .sidebar {
+    position: fixed;
+    top: 46px;
+    left: 0;
+    bottom: 0;
+    width: 84vw;
+    max-width: 320px;
+    min-width: 0;
+    z-index: 200;
+    background: var(--bg-sidebar);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35);
+    margin-left: 0 !important;
+    transform: translateX(0);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .sidebar.collapsed {
+    transform: translateX(-100%);
+  }
+
+  /* Bottom status hint has no use on touchscreen phones */
+  .bottom-status {
+    display: none !important;
+  }
+
+  /* EPUB Fullscreen Edge-to-Edge on Mobile */
+  .epub-wrapper {
+    padding: 0 !important;
+  }
+
+  .epub-stage {
+    max-width: 100% !important;
+    max-height: 100% !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .epub-footer {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 12px;
+    font-size: 10px;
+  }
+
+  /* PDF Viewport Padding Reduction */
+  .viewport {
+    padding: 0 6px;
+  }
+
+  .pages-wrapper {
+    padding: 10px 0 36px 0;
+    gap: 12px;
+  }
+
+  /* Search Dropdown on Mobile */
+  .search-modal {
+    top: 50px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    padding: 4px 8px;
+  }
+
+  .search-input {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* 2. Bookshelf Header & Grid on Mobile (< 600px) */
 @media (max-width: 600px) {
   .shelf-header {
-    padding: 0 16px;
+    height: 54px;
+    min-height: 54px;
+    padding: 0 12px;
+    gap: 8px;
   }
+
+  .shelf-brand {
+    gap: 8px;
+  }
+
+  .shelf-logo {
+    width: 24px;
+    height: 24px;
+  }
+
+  .shelf-title {
+    font-size: 14px;
+  }
+
+  /* Hide long status text to keep header within screen */
+  .shelf-subtitle {
+    display: none;
+  }
+
+  .shelf-actions {
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
   .shelf-search {
+    width: 86px;
+    font-size: 11px;
+    padding: 5px 8px;
+  }
+
+  .shelf-search:focus {
     width: 110px;
   }
-  .shelf-search:focus {
-    width: 140px;
+
+  /* Hide "上传新书" label text, keep icon only */
+  #btnShelfUpload span {
+    display: none;
   }
+
+  #btnShelfUpload {
+    padding: 6px 9px !important;
+    border-radius: var(--ui-radius-sm);
+  }
+
   .shelf-filter-bar {
-    padding: 8px 16px;
+    padding: 6px 12px;
   }
+
+  .shelf-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 4px;
+  }
+
+  .shelf-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .shelf-tab-btn {
+    font-size: 11px;
+    padding: 3px 8px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
   .shelf-content {
-    padding: 20px 16px;
+    padding: 16px 12px;
   }
+
   .shelf-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 20px 14px;
+    gap: 16px 12px;
+  }
+
+  .book-delete-icon {
+    padding: 6px;
+    margin: -3px;
+  }
+
+  .shelf-grid.list-view .book-card {
+    padding: 10px 12px;
+    gap: 12px;
+  }
+
+  .shelf-grid.list-view .book-jacket {
+    width: 42px;
+    height: 60px;
+  }
+
+  .shelf-grid.list-view .book-title-text {
+    font-size: 13px;
   }
 }
 
