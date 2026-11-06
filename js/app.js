@@ -348,9 +348,15 @@
       exportBtn.addEventListener('click', exportNotesToMarkdown);
     }
     const clearBtn = document.getElementById('btnClearNotes');
-    if (clearBtn) {
-      clearBtn.addEventListener('click', () => {
-        if (confirm('确认清空当前文档的所有读书笔记吗？')) {
+        if (clearBtn) {
+      clearBtn.addEventListener('click', async () => {
+        const ok = await showConfirmDialog({
+          title: '清空所有读书笔记？',
+          message: '确定清空当前书籍的所有划词高亮和批注心得吗？<br><span style="font-size:12px;color:var(--text-muted);display:block;margin-top:6px;">此操作不可撤销。</span>',
+          confirmText: '清空笔记',
+          isDanger: true
+        });
+        if (ok) {
           state.notes = [];
           saveNotesToStorage();
           showToast('已清空笔记');
@@ -1759,14 +1765,20 @@
       });
 
       const delBtn = card.querySelector('.book-delete-icon');
-      if (delBtn) {
+            if (delBtn) {
         delBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
-          if (confirm('确定要从云端删除《' + book.title + '》吗？')) {
+          const ok = await showConfirmDialog({
+            title: '从云端删除书籍？',
+            message: '确定要彻底删除 <strong>《' + book.title + '》</strong> 吗？<br><span style="font-size:12px;color:var(--text-muted);display:block;margin-top:6px;">该书籍文件及所有设备上的阅读进度与笔记将被永久移除。</span>',
+            confirmText: '确认删除',
+            isDanger: true
+          });
+          if (ok) {
             showToast('正在删除...');
             try {
               await window.CloudService.deleteBook(book);
-              showToast('已删除书籍');
+              showToast('已从云端删除书籍');
               refreshBookshelf();
             } catch (err) {
               showToast('删除失败：' + err.message);
