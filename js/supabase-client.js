@@ -81,10 +81,10 @@
         coverUrl = await generateEpubCover(arrayBuffer.slice(0));
       }
 
-      // 2. Upload file to Storage Bucket
+      // 2. Upload file to Storage Bucket (use safe ASCII key to avoid S3/Supabase InvalidKey error)
       const fileExt = isEpub ? 'epub' : 'pdf';
-      const safeName = encodeURIComponent(file.name.replace(/[^a-zA-Z0-9.\u4e00-\u9fa5_-]/g, '_'));
-      const filePath = `uploads/${Date.now()}_${safeName}`;
+      const randomId = Math.random().toString(36).substring(2, 10);
+      const filePath = `uploads/${Date.now()}_${randomId}.${fileExt}`;
 
       if (onProgress) onProgress(30, '正在上传到云存储...');
 
