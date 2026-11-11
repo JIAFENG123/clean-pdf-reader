@@ -7,17 +7,17 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Clean Reader - 极简专注阅读器 (PDF & EPUB)</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=14">
-  <link rel="alternate icon" href="./favicon.svg?v=14">
-  <link rel="apple-touch-icon" href="./favicon.svg?v=14">
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=15">
+  <link rel="alternate icon" href="./favicon.svg?v=15">
+  <link rel="apple-touch-icon" href="./favicon.svg?v=15">
   <link rel="manifest" href="./manifest.json">
-  <link rel="stylesheet" href="./css/style.css?v=14">
+  <link rel="stylesheet" href="./css/style.css?v=15">
   <script src="./lib/jszip.min.js"></script>
   <script src="./lib/epub.min.js"></script>
   <script src="./lib/pdf.min.js"></script>
   <script src="./lib/supabase.min.js"></script>
-  <script src="./js/config.js?v=14"></script>
-  <script src="./js/supabase-client.js?v=14"></script>
+  <script src="./js/config.js?v=15"></script>
+  <script src="./js/supabase-client.js?v=15"></script>
 </head>
 <body>
   <div id="app" class="app-container">
@@ -262,6 +262,18 @@
       </main>
     </div>
 
+    <!-- Reader Document Loading Overlay with Real-time Progress -->
+    <div id="readerLoadingOverlay" class="reader-loading-overlay" style="display: none;">
+      <div class="reader-loading-card">
+        <div class="spinner reader-spinner"></div>
+        <div id="readerLoadingTitle" class="reader-loading-title">正在载入文档...</div>
+        <div id="readerLoadingBarTrack" class="reader-loading-bar-track">
+          <div id="readerLoadingBarFill" class="reader-loading-bar-fill" style="width: 0%;"></div>
+        </div>
+        <div id="readerLoadingStatus" class="reader-loading-status">准备就绪...</div>
+      </div>
+    </div>
+
     <!-- Custom Elegant Confirmation Modal -->
     <div id="confirmModal" class="confirm-modal-backdrop" style="display: none;">
       <div class="confirm-modal-box">
@@ -284,6 +296,6 @@
 
   </div>
 
-  <script src="./js/app.js?v=14"></script>
+  <script src="./js/app.js?v=15"></script>
 </body>
 </html>

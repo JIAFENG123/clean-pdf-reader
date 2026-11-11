@@ -369,6 +369,166 @@ function showToast(text, duration = 2200) {
     } catch (e) {}
   }
 
+  // ==========================================================================
+  // High-Speed Local Book Storage (IndexedDB Cache for 0ms Instant Loading)
+  // ==========================================================================
+  const BookStorage = {
+    dbName: 'CleanReaderBooksDB',
+    storeName: 'books_cache',
+    version: 1,
+
+    open: function () {
+      return new Promise((resolve) => {
+        if (!window.indexedDB) {
+          resolve(null);
+          return;
+        }
+        const req = indexedDB.open(this.dbName, this.version);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(this.storeName)) {
+            db.createObjectStore(this.storeName, { keyPath: 'id' });
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+      });
+    },
+
+    get: async function (bookId) {
+      try {
+        const db = await this.open();
+        if (!db) return null;
+        return new Promise((resolve) => {
+          const tx = db.transaction(this.storeName, 'readonly');
+          const store = tx.objectStore(this.storeName);
+          const req = store.get(String(bookId));
+          req.onsuccess = () => resolve(req.result ? req.result.data : null);
+          req.onerror = () => resolve(null);
+        });
+      } catch (e) {
+        return null;
+      }
+    },
+
+    set: async function (bookId, arrayBuffer) {
+      try {
+        const db = await this.open();
+        if (!db) return;
+        return new Promise((resolve) => {
+          const tx = db.transaction(this.storeName, 'readwrite');
+          const store = tx.objectStore(this.storeName);
+          store.put({
+            id: String(bookId),
+            data: arrayBuffer,
+            savedAt: Date.now()
+          });
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+        });
+      } catch (e) {
+        console.warn('BookStorage set error:', e);
+      }
+    },
+
+    remove: async function (bookId) {
+      try {
+        const db = await this.open();
+        if (!db) return;
+        const tx = db.transaction(this.storeName, 'readwrite');
+        tx.objectStore(this.storeName).delete(String(bookId));
+      } catch (e) {}
+    }
+  };
+  window.BookStorage = BookStorage;
+
+  function showReaderLoading(title, status = '准备载入...', pct = null) {
+    const overlay = document.getElementById('readerLoadingOverlay');
+    const titleEl = document.getElementById('readerLoadingTitle');
+    const fillEl = document.getElementById('readerLoadingBarFill');
+    const statusEl = document.getElementById('readerLoadingStatus');
+    if (!overlay) return;
+
+    if (title && titleEl) titleEl.textContent = title;
+    if (status && statusEl) statusEl.textContent = status;
+    if (fillEl) {
+      if (typeof pct === 'number') {
+        fillEl.style.width = Math.max(0, Math.min(100, pct)) + '%';
+      } else {
+        fillEl.style.width = '100%';
+      }
+    }
+    overlay.style.display = 'flex';
+  }
+
+  function hideReaderLoading() {
+    const overlay = document.getElementById('readerLoadingOverlay');
+    if (overlay) {
+      overlay.style.display = 'none';
+    }
+  }
+
+  // Stream download with real-time percentage progress
+  async function fetchWithProgress(url, onProgress) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+
+    const contentLength = response.headers.get('content-length');
+    const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+
+    if (!response.body || !window.ReadableStream) {
+      const buffer = await response.arrayBuffer();
+      if (onProgress) onProgress(100, buffer.byteLength, buffer.byteLength);
+      return buffer;
+    }
+
+    const reader = response.body.getReader();
+    let receivedBytes = 0;
+    const chunks = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      receivedBytes += value.length;
+      if (onProgress) {
+        const pct = totalBytes > 0 ? Math.round((receivedBytes / totalBytes) * 100) : 0;
+        onProgress(pct, receivedBytes, totalBytes);
+      }
+    }
+
+    const allChunks = new Uint8Array(receivedBytes);
+    let position = 0;
+    for (const chunk of chunks) {
+      allChunks.set(chunk, position);
+      position += chunk.length;
+    }
+    return allChunks.buffer;
+  }
+
+  // Idle Background Prefetch
+  function prefetchRecentBook(books) {
+    if (!books || books.length === 0 || !window.BookStorage) return;
+    const recent = books.find(b => b.progress_percent > 0 && b.progress_percent < 100) || books[0];
+    if (!recent || !recent.file_path) return;
+
+    BookStorage.get(recent.id).then(cached => {
+      if (!cached && window.CloudService) {
+        const fileUrl = window.CloudService.getBookFileUrl(recent.file_path);
+        if (fileUrl) {
+          fetch(fileUrl).then(resp => {
+            if (resp && resp.ok) return resp.arrayBuffer();
+          }).then(buffer => {
+            if (buffer) {
+              BookStorage.set(recent.id, buffer);
+              console.log('Prefetched recent book into local cache:', recent.title);
+            }
+          }).catch(() => {});
+        }
+      }
+    });
+  }
+
   // Notes Local Storage
   function loadNotesFromStorage() {
     try {
@@ -913,13 +1073,29 @@ function showToast(text, duration = 2200) {
         showToast('已恢复阅读进度', 2200);
       }
 
-      // Generate locations for percentage calculation
-      state.epubBook.ready.then(() => {
-        return state.epubBook.locations.generate(1000);
-      }).then(() => {
-        updateEpubProgressDisplay();
-        syncReadingProgress(false);
-      }).catch(() => {});
+      // Instant Locations Loading from Cache (Avoids 10s CPU Freeze!)
+      const locKey = 'clean_epub_locations_' + state.fileName;
+      const cachedLocs = localStorage.getItem(locKey);
+      if (cachedLocs) {
+        try {
+          state.epubBook.locations.load(cachedLocs);
+          updateEpubProgressDisplay();
+        } catch (e) {}
+      } else {
+        // Defer heavy locations calculation until AFTER first page is rendered & readable!
+        setTimeout(() => {
+          if (!state.epubBook) return;
+          state.epubBook.ready.then(() => {
+            return state.epubBook.locations.generate(1000);
+          }).then(() => {
+            updateEpubProgressDisplay();
+            syncReadingProgress(false);
+            try {
+              localStorage.setItem(locKey, state.epubBook.locations.save());
+            } catch (e) {}
+          }).catch(() => {});
+        }, 1500);
+      }
 
       // Metadata & Title
       state.epubBook.loaded.metadata.then((meta) => {
@@ -1065,12 +1241,14 @@ function showToast(text, duration = 2200) {
       DOM.pageInput.max = state.totalPages;
 
       loadNotesFromStorage();
-      await renderSidebarOutline();
       initThumbnailsPlaceholder();
 
       await adjustScaleToContainer();
       renderDocument();
       showLoading(false);
+
+      // Asynchronously parse outline in background without delaying initial page render!
+      renderSidebarOutline().catch(() => {});
 
       // Auto-restore reading progress if available
       if (initialPage && initialPage > 1 && initialPage <= state.totalPages) {
@@ -1912,6 +2090,7 @@ function showToast(text, duration = 2200) {
       state.cloudBooks = books;
       updateShelfCounts(books);
       renderBookshelf(getFilteredBooks());
+      prefetchRecentBook(books);
       DOM.shelfStats.textContent = '多端实时同步 · 共 ' + books.length + ' 本书';
     } catch (err) {
       console.warn('Failed to load books from Supabase:', err);
@@ -2022,6 +2201,7 @@ function showToast(text, duration = 2200) {
             showToast('正在删除...');
             try {
               await window.CloudService.deleteBook(book);
+              BookStorage.remove(book.id);
               showToast('已从云端删除书籍');
               refreshBookshelf();
             } catch (err) {
@@ -2053,23 +2233,52 @@ function showToast(text, duration = 2200) {
 
   async function openCloudBook(book) {
     state.currentBookId = book.id;
-    hideBookshelf();
-    showToast('正在打开《' + book.title + '》...', 2000);
+    hideBookshelf(true);
 
-    const fileUrl = window.CloudService.getBookFileUrl(book.file_path);
-    if (!fileUrl) {
-      showToast('获取文件链接失败');
-      return;
+    const fileName = book.file_name || (book.title + '.' + book.format);
+
+    // 1. Check IndexedDB Local Cache first (0ms instant open!)
+    let arrayBuffer = await BookStorage.get(book.id);
+
+    if (arrayBuffer) {
+      showToast('从本地闪电秒开《' + book.title + '》...', 1200);
+    } else {
+      // 2. Not cached locally yet, download with stream progress
+      const fileUrl = window.CloudService.getBookFileUrl(book.file_path);
+      if (!fileUrl) {
+        showToast('获取文件链接失败');
+        return;
+      }
+
+      showReaderLoading('正在下载《' + book.title + '》...', '正在连接云端高速存储...', 5);
+
+      try {
+        arrayBuffer = await fetchWithProgress(fileUrl, (pct, received, total) => {
+          const recMB = (received / (1024 * 1024)).toFixed(1);
+          const totalMB = total > 0 ? (total / (1024 * 1024)).toFixed(1) + ' MB' : '计算中...';
+          const msg = total > 0 
+            ? '已下载 ' + pct + '% (' + recMB + ' / ' + totalMB + ') · 仅需首次下载，之后离线秒开'
+            : '已接收 ' + recMB + ' MB...';
+          showReaderLoading('正在高速下载《' + book.title + '》...', msg, pct);
+        });
+
+        // Save to IndexedDB for next time instant open!
+        BookStorage.set(book.id, arrayBuffer);
+      } catch (err) {
+        console.error('Download error:', err);
+        hideReaderLoading();
+        showToast('下载文件失败，请检查网络后重试');
+        showBookshelf(true);
+        return;
+      }
     }
 
-    try {
-      const resp = await fetch(fileUrl);
-      const arrayBuffer = await resp.arrayBuffer();
-      const fileName = book.file_name || (book.title + '.' + book.format);
+    showReaderLoading('正在解析排版...', '准备进入专注阅读...', 100);
 
+    try {
       if (book.format === 'epub') {
         await loadEPUB(arrayBuffer, fileName, book.current_location);
-        // Self-healing: if cover was broken blob or missing, update it now!
+        hideReaderLoading();
         if (!book.cover_url || book.cover_url.startsWith('blob:')) {
           generateEpubCover(arrayBuffer.slice(0)).then(newCover => {
             if (newCover) {
@@ -2081,7 +2290,7 @@ function showToast(text, duration = 2200) {
       } else {
         const initialPage = book.current_location ? parseInt(book.current_location, 10) : null;
         await loadPDF(new Uint8Array(arrayBuffer), fileName, initialPage);
-        // Self-healing cover for PDF
+        hideReaderLoading();
         if (!book.cover_url || book.cover_url.startsWith('blob:')) {
           generatePdfCover(arrayBuffer.slice(0)).then(newCover => {
             if (newCover) {
@@ -2092,8 +2301,10 @@ function showToast(text, duration = 2200) {
         }
       }
     } catch (e) {
-      console.error('Failed to download cloud book:', e);
-      showToast('下载文件失败，请检查网络或 Bucket 权限');
+      console.error('Failed to parse book:', e);
+      hideReaderLoading();
+      showToast('解析书籍失败: ' + (e.message || '未知错误'));
+      showBookshelf(true);
     }
   }
 
