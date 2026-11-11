@@ -1,5 +1,5 @@
 // Clean Web Reader (PDF & EPUB & Cloud Bookshelf) Service Worker
-const CACHE_NAME = 'clean-reader-v16';
+const CACHE_NAME = 'clean-reader-v17';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

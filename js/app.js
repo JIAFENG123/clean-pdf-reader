@@ -1083,28 +1083,27 @@ function showToast(text, duration = 2200) {
     if (matchingItems.length === 1) {
       activeItem = matchingItems[0];
     } else if (matchingItems.length > 1) {
-      let matchedSubItem = null;
+      // Retain the latest passed section anchor without jumping back
+      activeItem = matchingItems[0];
       try {
         const iframe = DOM.epubViewerArea ? DOM.epubViewerArea.querySelector('iframe') : null;
         const iframeDoc = iframe ? (iframe.contentDocument || iframe.contentWindow.document) : null;
         if (iframeDoc) {
           const iframeWidth = iframe.clientWidth || window.innerWidth;
+          const iframeHeight = iframe.clientHeight || window.innerHeight;
           for (const mItem of matchingItems) {
             const elId = mItem.dataset.elementId;
-            if (elId) {
-              const targetEl = iframeDoc.getElementById(elId);
-              if (targetEl) {
-                const rect = targetEl.getBoundingClientRect();
-                if (rect.left >= -50 && rect.left <= iframeWidth * 0.95 && rect.top <= window.innerHeight) {
-                  matchedSubItem = mItem;
-                }
+            if (!elId) continue;
+            const targetEl = iframeDoc.getElementById(elId) || iframeDoc.querySelector(`[name="${elId}"]`);
+            if (targetEl) {
+              const rect = targetEl.getBoundingClientRect();
+              if (rect.left < iframeWidth * 0.95 && rect.top < iframeHeight * 0.95) {
+                activeItem = mItem;
               }
             }
           }
         }
       } catch (e) {}
-
-      activeItem = matchedSubItem || matchingItems[0];
     } else {
       for (const el of items) {
         const idx = parseInt(el.dataset.spineIndex, 10);
@@ -1265,11 +1264,21 @@ function showToast(text, duration = 2200) {
         renderEpubMetadata(meta || {});
       });
 
-      // Navigation / TOC
-      state.epubBook.loaded.navigation.then((nav) => {
+      // Navigation / TOC: Wait for both spine and navigation to be ready so indices match 100%
+      Promise.all([
+        state.epubBook.loaded.spine,
+        state.epubBook.loaded.navigation
+      ]).then(([spine, nav]) => {
         renderEpubOutline(nav.toc);
         if (state.epubLocation) {
           updateActiveEpubOutline(state.epubLocation);
+        }
+      }).catch(() => {
+        if (state.epubBook && state.epubBook.loaded && state.epubBook.loaded.navigation) {
+          state.epubBook.loaded.navigation.then(nav => {
+            renderEpubOutline(nav.toc);
+            if (state.epubLocation) updateActiveEpubOutline(state.epubLocation);
+          }).catch(() => {});
         }
       });
 
