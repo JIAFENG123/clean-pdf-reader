@@ -1028,6 +1028,7 @@ function showToast(text, duration = 2200) {
                 target = elementId ? `${baseHref}#${elementId}` : baseHref;
               }
             }
+            state.navigatingTocItem = a;
             state.epubRendition.display(target);
           }
           DOM.outlineView.querySelectorAll('.outline-item').forEach(el => el.classList.remove('active'));
@@ -1062,6 +1063,20 @@ function showToast(text, duration = 2200) {
     const items = Array.from(DOM.outlineView.querySelectorAll('.outline-item'));
     if (items.length === 0) return;
 
+    if (state.navigatingTocItem) {
+      const navItem = state.navigatingTocItem;
+      state.navigatingTocItem = null;
+      items.forEach(el => el.classList.remove('active'));
+      navItem.classList.add('active');
+      if (DOM.epubFooterTitle && navItem.dataset.label) {
+        DOM.epubFooterTitle.textContent = navItem.dataset.label;
+      }
+      if (state.sidebarOpen && state.activeSidebarTab === 'outline') {
+        navItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+      return;
+    }
+
     let currentSpineIndex = -1;
     if (location && location.start && location.start.index !== undefined) {
       currentSpineIndex = location.start.index;
@@ -1083,9 +1098,8 @@ function showToast(text, duration = 2200) {
     if (matchingItems.length === 1) {
       activeItem = matchingItems[0];
     } else if (matchingItems.length > 1) {
-      activeItem = matchingItems[0];
       const currentCfi = (location && location.start) ? location.start.cfi : null;
-      const section = state.epubBook && state.epubBook.spine ? state.epubBook.spine.items[currentSpineIndex] : null;
+      const section = state.epubBook && state.epubBook.spine ? state.epubBook.spine.get(currentSpineIndex) : null;
       let iframeDoc = null;
       try {
         const iframe = DOM.epubViewerArea ? DOM.epubViewerArea.querySelector('iframe') : null;
@@ -1098,17 +1112,21 @@ function showToast(text, duration = 2200) {
       }
 
       if (currentCfi && cfiComparer && section) {
+        // Pre-resolve CFIs for matching items in this spine section
         for (const mItem of matchingItems) {
-          let itemCfi = mItem.dataset.cfi;
-          if (!itemCfi && mItem.dataset.elementId && iframeDoc && typeof section.cfiFromElement === 'function') {
+          if (!mItem.dataset.cfi && mItem.dataset.elementId && iframeDoc && typeof section.cfiFromElement === 'function') {
             try {
               const el = iframeDoc.getElementById(mItem.dataset.elementId) || iframeDoc.querySelector(`[name="${mItem.dataset.elementId}"]`);
               if (el) {
-                itemCfi = section.cfiFromElement(el);
-                mItem.dataset.cfi = itemCfi;
+                mItem.dataset.cfi = section.cfiFromElement(el);
               }
             } catch (e) {}
           }
+        }
+
+        // Find the best match: the last item whose CFI <= currentCfi
+        for (const mItem of matchingItems) {
+          const itemCfi = mItem.dataset.cfi;
           if (itemCfi) {
             try {
               if (cfiComparer.compare(currentCfi, itemCfi) >= 0) {
@@ -1119,6 +1137,10 @@ function showToast(text, duration = 2200) {
             } catch (e) {}
           }
         }
+      }
+
+      if (!activeItem) {
+        activeItem = matchingItems[0];
       }
     } else {
       for (const el of items) {
@@ -1286,14 +1308,16 @@ function showToast(text, duration = 2200) {
         state.epubBook.loaded.navigation
       ]).then(([spine, nav]) => {
         renderEpubOutline(nav.toc);
-        if (state.epubLocation) {
-          updateActiveEpubOutline(state.epubLocation);
+        const loc = state.epubLocation || (state.epubRendition ? state.epubRendition.currentLocation() : null);
+        if (loc) {
+          updateActiveEpubOutline(loc);
         }
       }).catch(() => {
         if (state.epubBook && state.epubBook.loaded && state.epubBook.loaded.navigation) {
           state.epubBook.loaded.navigation.then(nav => {
             renderEpubOutline(nav.toc);
-            if (state.epubLocation) updateActiveEpubOutline(state.epubLocation);
+            const loc = state.epubLocation || (state.epubRendition ? state.epubRendition.currentLocation() : null);
+            if (loc) updateActiveEpubOutline(loc);
           }).catch(() => {});
         }
       });
@@ -2642,8 +2666,10 @@ function showToast(text, duration = 2200) {
       if (state.sidebarOpen) {
         if (state.activeSidebarTab === 'thumbnails') renderVisibleThumbnails();
         else if (state.activeSidebarTab === 'outline') {
-          if (state.docType === 'epub') updateActiveEpubOutline(state.epubLocation);
-          else updateActiveOutline(state.currentPage);
+          if (state.docType === 'epub') {
+            const loc = state.epubLocation || (state.epubRendition ? state.epubRendition.currentLocation() : null);
+            if (loc) updateActiveEpubOutline(loc);
+          } else updateActiveOutline(state.currentPage);
         }
         else if (state.activeSidebarTab === 'notes') loadNotesFromStorage();
       }
@@ -2669,8 +2695,10 @@ function showToast(text, duration = 2200) {
       DOM.thumbnailsView.style.display = 'none';
       DOM.outlineView.style.display = 'block';
       DOM.notesView.style.display = 'none';
-      if (state.docType === 'epub') updateActiveEpubOutline(state.epubLocation);
-      else updateActiveOutline(state.currentPage);
+      if (state.docType === 'epub') {
+        const loc = state.epubLocation || (state.epubRendition ? state.epubRendition.currentLocation() : null);
+        if (loc) updateActiveEpubOutline(loc);
+      } else updateActiveOutline(state.currentPage);
     });
 
     DOM.tabNotes.addEventListener('click', () => {
