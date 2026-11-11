@@ -1083,27 +1083,43 @@ function showToast(text, duration = 2200) {
     if (matchingItems.length === 1) {
       activeItem = matchingItems[0];
     } else if (matchingItems.length > 1) {
-      // Retain the latest passed section anchor without jumping back
       activeItem = matchingItems[0];
+      const currentCfi = (location && location.start) ? location.start.cfi : null;
+      const section = state.epubBook && state.epubBook.spine ? state.epubBook.spine.items[currentSpineIndex] : null;
+      let iframeDoc = null;
       try {
         const iframe = DOM.epubViewerArea ? DOM.epubViewerArea.querySelector('iframe') : null;
-        const iframeDoc = iframe ? (iframe.contentDocument || iframe.contentWindow.document) : null;
-        if (iframeDoc) {
-          const iframeWidth = iframe.clientWidth || window.innerWidth;
-          const iframeHeight = iframe.clientHeight || window.innerHeight;
-          for (const mItem of matchingItems) {
-            const elId = mItem.dataset.elementId;
-            if (!elId) continue;
-            const targetEl = iframeDoc.getElementById(elId) || iframeDoc.querySelector(`[name="${elId}"]`);
-            if (targetEl) {
-              const rect = targetEl.getBoundingClientRect();
-              if (rect.left < iframeWidth * 0.95 && rect.top < iframeHeight * 0.95) {
-                activeItem = mItem;
+        iframeDoc = iframe ? (iframe.contentDocument || iframe.contentWindow.document) : null;
+      } catch (e) {}
+
+      let cfiComparer = null;
+      if (window.ePub && window.ePub.CFI) {
+        try { cfiComparer = new window.ePub.CFI(); } catch (e) {}
+      }
+
+      if (currentCfi && cfiComparer && section) {
+        for (const mItem of matchingItems) {
+          let itemCfi = mItem.dataset.cfi;
+          if (!itemCfi && mItem.dataset.elementId && iframeDoc && typeof section.cfiFromElement === 'function') {
+            try {
+              const el = iframeDoc.getElementById(mItem.dataset.elementId) || iframeDoc.querySelector(`[name="${mItem.dataset.elementId}"]`);
+              if (el) {
+                itemCfi = section.cfiFromElement(el);
+                mItem.dataset.cfi = itemCfi;
               }
-            }
+            } catch (e) {}
+          }
+          if (itemCfi) {
+            try {
+              if (cfiComparer.compare(currentCfi, itemCfi) >= 0) {
+                activeItem = mItem;
+              } else {
+                break;
+              }
+            } catch (e) {}
           }
         }
-      } catch (e) {}
+      }
     } else {
       for (const el of items) {
         const idx = parseInt(el.dataset.spineIndex, 10);
