@@ -921,6 +921,63 @@ function showToast(text, duration = 2200) {
     `;
   }
 
+  function normalizeEpubHref(href) {
+    if (!href) return '';
+    let clean = href.split('#')[0].split('?')[0].trim();
+    try { clean = decodeURIComponent(clean); } catch (e) {}
+    clean = clean.replace(/\\/g, '/').replace(/^(\.\/|\/)+/, '');
+    const parts = clean.split('/');
+    const stack = [];
+    for (const part of parts) {
+      if (part === '.' || part === '') continue;
+      if (part === '..') {
+        if (stack.length > 0) stack.pop();
+      } else {
+        stack.push(part);
+      }
+    }
+    return stack.join('/');
+  }
+
+  function resolveEpubTocSpineIndex(href) {
+    if (!state.epubBook || !state.epubBook.spine) return -1;
+    const spine = state.epubBook.spine;
+    if (!href) return -1;
+
+    // 1. Direct lookup in spine
+    try {
+      const sec = spine.get(href);
+      if (sec && typeof sec.index === 'number') return sec.index;
+    } catch (e) {}
+
+    // 2. Lookup via book.canonical
+    if (typeof state.epubBook.canonical === 'function') {
+      try {
+        const can = state.epubBook.canonical(href);
+        const sec = spine.get(can);
+        if (sec && typeof sec.index === 'number') return sec.index;
+      } catch (e) {}
+    }
+
+    // 3. Normalized path matching against spine.items
+    const cleanHref = normalizeEpubHref(href);
+    const items = spine.items || [];
+    for (let i = 0; i < items.length; i++) {
+      const s = items[i];
+      const sHref = normalizeEpubHref(s.href || '');
+      if (sHref === cleanHref) return s.index !== undefined ? s.index : i;
+      if (sHref.endsWith('/' + cleanHref) || cleanHref.endsWith('/' + sHref)) {
+        return s.index !== undefined ? s.index : i;
+      }
+      const fToc = cleanHref.split('/').pop();
+      const fSpine = sHref.split('/').pop();
+      if (fToc && fSpine && fToc === fSpine) {
+        return s.index !== undefined ? s.index : i;
+      }
+    }
+    return -1;
+  }
+
   function renderEpubOutline(tocItems) {
     if (!DOM.outlineView) return;
     DOM.outlineView.innerHTML = '';
@@ -933,47 +990,149 @@ function showToast(text, duration = 2200) {
     }
 
     const ul = document.createElement('ul');
-    ul.className = 'outline-list';
+    ul.className = 'outline-tree';
 
     function buildTree(items, container) {
       items.forEach(item => {
         const li = document.createElement('li');
-        li.className = 'outline-item';
+        const a = document.createElement('a');
+        a.className = 'outline-item';
+        a.href = '#';
+
+        const rawHref = item.href || '';
+        const spineIndex = resolveEpubTocSpineIndex(rawHref);
+        const hashIdx = rawHref.indexOf('#');
+        const elementId = hashIdx !== -1 ? rawHref.slice(hashIdx + 1) : '';
+        const labelText = item.label ? item.label.trim() : '章节';
+
+        a.dataset.href = rawHref;
+        if (spineIndex !== -1) a.dataset.spineIndex = spineIndex;
+        if (elementId) a.dataset.elementId = elementId;
+        a.dataset.label = labelText;
 
         const titleSpan = document.createElement('span');
         titleSpan.className = 'outline-title';
-        titleSpan.textContent = item.label ? item.label.trim() : '章节';
-        titleSpan.title = titleSpan.textContent;
+        titleSpan.textContent = labelText;
+        titleSpan.title = labelText;
+        a.appendChild(titleSpan);
 
-        li.appendChild(titleSpan);
-        li.addEventListener('click', (e) => {
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
           e.stopPropagation();
           if (state.epubRendition) {
-            state.epubRendition.display(item.href);
+            let target = rawHref;
+            if (state.epubBook && state.epubBook.spine) {
+              const sec = state.epubBook.spine.get(rawHref);
+              if (!sec && spineIndex !== -1 && state.epubBook.spine.items[spineIndex]) {
+                const baseHref = state.epubBook.spine.items[spineIndex].href;
+                target = elementId ? `${baseHref}#${elementId}` : baseHref;
+              }
+            }
+            state.epubRendition.display(target);
           }
-          document.querySelectorAll('.outline-item').forEach(el => el.classList.remove('active'));
-          li.classList.add('active');
-          if (DOM.epubFooterTitle && item.label) {
-            DOM.epubFooterTitle.textContent = item.label.trim();
+          DOM.outlineView.querySelectorAll('.outline-item').forEach(el => el.classList.remove('active'));
+          a.classList.add('active');
+          if (DOM.epubFooterTitle && labelText) {
+            DOM.epubFooterTitle.textContent = labelText;
           }
           if (window.innerWidth <= 768 && state.sidebarOpen && DOM.btnToggleSidebar) {
             DOM.btnToggleSidebar.click();
           }
         });
 
-        container.appendChild(li);
+        li.appendChild(a);
 
         if (item.subitems && item.subitems.length > 0) {
           const subUl = document.createElement('ul');
-          subUl.className = 'outline-sublist';
+          subUl.className = 'outline-sub';
           buildTree(item.subitems, subUl);
-          container.appendChild(subUl);
+          li.appendChild(subUl);
         }
+
+        container.appendChild(li);
       });
     }
 
     buildTree(tocItems, ul);
     DOM.outlineView.appendChild(ul);
+  }
+
+  function updateActiveEpubOutline(location) {
+    if (!DOM.outlineView) return;
+    const items = Array.from(DOM.outlineView.querySelectorAll('.outline-item'));
+    if (items.length === 0) return;
+
+    let currentSpineIndex = -1;
+    if (location && location.start && location.start.index !== undefined) {
+      currentSpineIndex = location.start.index;
+    } else if (location && location.start && location.start.href) {
+      currentSpineIndex = resolveEpubTocSpineIndex(location.start.href);
+    } else if (state.epubBook && state.epubBook.spine && state.epubLocation && state.epubLocation.start) {
+      currentSpineIndex = state.epubLocation.start.index;
+    }
+
+    if (currentSpineIndex === -1) return;
+
+    const matchingItems = items.filter(el => {
+      const idx = parseInt(el.dataset.spineIndex, 10);
+      return !isNaN(idx) && idx === currentSpineIndex;
+    });
+
+    let activeItem = null;
+
+    if (matchingItems.length === 1) {
+      activeItem = matchingItems[0];
+    } else if (matchingItems.length > 1) {
+      let matchedSubItem = null;
+      try {
+        const iframe = DOM.epubViewerArea ? DOM.epubViewerArea.querySelector('iframe') : null;
+        const iframeDoc = iframe ? (iframe.contentDocument || iframe.contentWindow.document) : null;
+        if (iframeDoc) {
+          const iframeWidth = iframe.clientWidth || window.innerWidth;
+          for (const mItem of matchingItems) {
+            const elId = mItem.dataset.elementId;
+            if (elId) {
+              const targetEl = iframeDoc.getElementById(elId);
+              if (targetEl) {
+                const rect = targetEl.getBoundingClientRect();
+                if (rect.left >= -50 && rect.left <= iframeWidth * 0.95 && rect.top <= window.innerHeight) {
+                  matchedSubItem = mItem;
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {}
+
+      activeItem = matchedSubItem || matchingItems[0];
+    } else {
+      for (const el of items) {
+        const idx = parseInt(el.dataset.spineIndex, 10);
+        if (!isNaN(idx) && idx <= currentSpineIndex) {
+          activeItem = el;
+        } else if (!isNaN(idx) && idx > currentSpineIndex) {
+          break;
+        }
+      }
+    }
+
+    if (!activeItem && currentSpineIndex === 0 && items.length > 0) {
+      activeItem = items[0];
+    }
+
+    if (activeItem) {
+      items.forEach(el => el.classList.remove('active'));
+      activeItem.classList.add('active');
+
+      const label = activeItem.dataset.label;
+      if (label && DOM.epubFooterTitle) {
+        DOM.epubFooterTitle.textContent = label;
+      }
+
+      if (state.sidebarOpen && state.activeSidebarTab === 'outline') {
+        activeItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
   }
 
   async function loadEPUB(data, fileName, initialLocation = null) {
@@ -1109,14 +1268,18 @@ function showToast(text, duration = 2200) {
       // Navigation / TOC
       state.epubBook.loaded.navigation.then((nav) => {
         renderEpubOutline(nav.toc);
+        if (state.epubLocation) {
+          updateActiveEpubOutline(state.epubLocation);
+        }
       });
 
-      // Location tracker
+      // Location tracker with Dynamic Outline & Chapter Highlight Sync
       state.epubRendition.on('relocated', (location) => {
         state.epubLocation = location;
         if (location && location.start) {
           updateEpubProgressDisplay();
           syncReadingProgress(false);
+          updateActiveEpubOutline(location);
         }
       });
 
@@ -2406,7 +2569,19 @@ function showToast(text, duration = 2200) {
     DOM.pageInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const val = parseInt(DOM.pageInput.value, 10);
-        if (!isNaN(val)) goToPage(val);
+        if (!isNaN(val)) {
+          if (state.docType === 'epub') {
+            if (state.epubBook && state.epubBook.spine && state.epubBook.spine.items) {
+              const targetIdx = Math.max(0, Math.min(state.epubBook.spine.items.length - 1, val - 1));
+              const section = state.epubBook.spine.items[targetIdx];
+              if (section && state.epubRendition) {
+                state.epubRendition.display(section.href);
+              }
+            }
+          } else {
+            goToPage(val);
+          }
+        }
       }
     });
 
@@ -2441,7 +2616,10 @@ function showToast(text, duration = 2200) {
       DOM.btnToggleSidebar.classList.toggle('active', state.sidebarOpen);
       if (state.sidebarOpen) {
         if (state.activeSidebarTab === 'thumbnails') renderVisibleThumbnails();
-        else if (state.activeSidebarTab === 'outline') updateActiveOutline(state.currentPage);
+        else if (state.activeSidebarTab === 'outline') {
+          if (state.docType === 'epub') updateActiveEpubOutline(state.epubLocation);
+          else updateActiveOutline(state.currentPage);
+        }
         else if (state.activeSidebarTab === 'notes') loadNotesFromStorage();
       }
       setTimeout(adjustScaleToContainer, 250);
@@ -2466,7 +2644,8 @@ function showToast(text, duration = 2200) {
       DOM.thumbnailsView.style.display = 'none';
       DOM.outlineView.style.display = 'block';
       DOM.notesView.style.display = 'none';
-      updateActiveOutline(state.currentPage);
+      if (state.docType === 'epub') updateActiveEpubOutline(state.epubLocation);
+      else updateActiveOutline(state.currentPage);
     });
 
     DOM.tabNotes.addEventListener('click', () => {
